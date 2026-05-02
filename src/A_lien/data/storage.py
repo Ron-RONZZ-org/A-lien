@@ -1,110 +1,316 @@
-"""A-lien data layer - SQLite storage for retposhto and kontakto."""
+"""A-lien data layer — SQLite storage for retposhto and kontakto.
+
+All tables in lien.db at A.core.paths.data_dir(). WAL mode via A.data.base.SQLiteDB.
+
+Design decisions:
+- No pasvorto column in kontoj — passwords go to system keyring
+- FTS5 on kontaktoj only (messages use IMAP SEARCH)
+- JSON arrays for multi-value fields (phones, emails, CC/BCC per A-encik pattern)
+- Attachments: BLOB for small files, disk path for large files
+- dosierujoj, mesagxoj, aldonajxoj are NOT managed by CRUDService (too many records)
+  — all others ARE managed by CRUDService for soft-delete + undo support
+"""
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from A import ensure_dirs as _ensure_dirs
+from A.core.paths import data_dir
+from A.core.paths import ensure_dirs as _ensure_dirs
 from A.data.base import SQLiteDB
+from A.data.search import FTSConfig
+from A.utils.normalize import fold_search_text
 
-_DATA_DIR: Path = Path.home() / ".local" / "share" / "A"
+# ══════════════════════════════════════════════════════════════════════════════
+# DDL — each string is exactly one SQL statement (SQLiteDB.execute limitation)
+# ══════════════════════════════════════════════════════════════════════════════
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Email accounts (retposto)
-# ──────────────────────────────────────────────────────────────────────────────
+# ── Email accounts (retposto) ────────────────────────────────────────────────
 
 _CREATE_KONTOJ = """
 CREATE TABLE IF NOT EXISTS kontoj (
-    uuid TEXT PRIMARY KEY,
-    retposhto TEXT NOT NULL,
-    uzantnomo TEXT NOT NULL,
-    pasvorto TEXT NOT NULL,
-    smtp_server TEXT NOT NULL,
-    smtp_port INTEGER NOT NULL DEFAULT 587,
-    imap_server TEXT NOT NULL,
-    imap_port INTEGER NOT NULL DEFAULT 993,
-    usessl INTEGER NOT NULL DEFAULT 1,
-    kreita_je TEXT NOT NULL,
+    uuid            TEXT PRIMARY KEY,
+    ordo            INTEGER NOT NULL DEFAULT 0,
+    nomo            TEXT NOT NULL,
+    retposto        TEXT NOT NULL UNIQUE,
+    imap_servilo    TEXT NOT NULL,
+    imap_haveno     INTEGER NOT NULL DEFAULT 993,
+    imap_ssl        INTEGER NOT NULL DEFAULT 1,
+    smtp_servilo    TEXT NOT NULL,
+    smtp_haveno     INTEGER NOT NULL DEFAULT 587,
+    smtp_tls        INTEGER NOT NULL DEFAULT 1,
+    imap_uzantonomo TEXT,
+    smtp_uzantonomo TEXT,
+    webmail_url     TEXT,
+    sieve_servilo   TEXT,
+    sieve_haveno    INTEGER NOT NULL DEFAULT 4190,
+    sieve_starttls  INTEGER NOT NULL DEFAULT 1,
+    sieve_uzantonomo TEXT,
+    subskribo       TEXT,
+    kreita_je       TEXT NOT NULL,
+    modifita_je     TEXT NOT NULL
+);
+"""
+
+# ── IMAP folders ─────────────────────────────────────────────────────────────
+
+_CREATE_DOSIERUJOJ = """
+CREATE TABLE IF NOT EXISTS dosierujoj (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid        TEXT NOT NULL UNIQUE,
+    konto_id    TEXT NOT NULL REFERENCES kontoj(uuid) ON DELETE CASCADE,
+    nomo        TEXT NOT NULL,
+    patro_id    TEXT REFERENCES dosierujoj(uuid) ON DELETE CASCADE,
+    server_nomo TEXT,
+    delimejo    TEXT DEFAULT '/',
+    kreita_je   TEXT NOT NULL,
+    modifita_je TEXT NOT NULL,
+    UNIQUE(konto_id, nomo, patro_id)
+);
+"""
+_IDX_DOSIERUJOJ_KONTO = """
+CREATE INDEX IF NOT EXISTS idx_dosierujoj_konto ON dosierujoj(konto_id);
+"""
+
+# ── Messages ─────────────────────────────────────────────────────────────────
+
+_CREATE_MESAGXOJ = """
+CREATE TABLE IF NOT EXISTS mesagxoj (
+    uuid           TEXT PRIMARY KEY,
+    konto_id       TEXT NOT NULL REFERENCES kontoj(uuid) ON DELETE CASCADE,
+    dosierujo_id   TEXT REFERENCES dosierujoj(uuid) ON DELETE SET NULL,
+    message_id     TEXT,
+    in_reply_to    TEXT,
+    references_hdr TEXT,
+    uid            TEXT,
+    de             TEXT,
+    al             TEXT NOT NULL DEFAULT '[]',
+    kc             TEXT NOT NULL DEFAULT '[]',
+    bkc            TEXT NOT NULL DEFAULT '[]',
+    subjekto       TEXT,
+    korpo          TEXT,
+    html_korpo     TEXT,
+    prioritato     INTEGER DEFAULT 5,
+    legita         INTEGER NOT NULL DEFAULT 0,
+    stelo          INTEGER NOT NULL DEFAULT 0,
+    spamo          INTEGER NOT NULL DEFAULT 0,
+    forigita       INTEGER NOT NULL DEFAULT 0,
+    aldonajxoj     TEXT NOT NULL DEFAULT '[]',
+    etikedoj       TEXT NOT NULL DEFAULT '[]',
+    ricevita_je    TEXT,
+    kreita_je      TEXT NOT NULL,
+    modifita_je    TEXT NOT NULL
+);
+"""
+_IDX_MESAGXOJ_KONTO = """
+CREATE INDEX IF NOT EXISTS idx_mesagxoj_konto ON mesagxoj(konto_id);
+"""
+_IDX_MESAGXOJ_DOSIERUJO = """
+CREATE INDEX IF NOT EXISTS idx_mesagxoj_dosierujo ON mesagxoj(dosierujo_id);
+"""
+_IDX_MESAGXOJ_KONTO_UID = """
+CREATE INDEX IF NOT EXISTS idx_mesagxoj_konto_uid ON mesagxoj(konto_id, uid);
+"""
+_IDX_MESAGXOJ_MESSAGE_ID = """
+CREATE INDEX IF NOT EXISTS idx_mesagxoj_message_id ON mesagxoj(konto_id, message_id);
+"""
+_IDX_MESAGXOJ_DATO = """
+CREATE INDEX IF NOT EXISTS idx_mesagxoj_dato ON mesagxoj(ricevita_je);
+"""
+
+# ── Attachments ──────────────────────────────────────────────────────────────
+
+_CREATE_ALDONAJXOJ = """
+CREATE TABLE IF NOT EXISTS aldonajxoj (
+    uuid         TEXT PRIMARY KEY,
+    mesagxo_id   TEXT NOT NULL REFERENCES mesagxoj(uuid) ON DELETE CASCADE,
+    dosiernomo   TEXT NOT NULL,
+    mime_tipo    TEXT NOT NULL DEFAULT 'application/octet-stream',
+    grandeco     INTEGER NOT NULL DEFAULT 0,
+    enhavo       BLOB,
+    vojo         TEXT,
+    cid          TEXT,
+    kreita_je    TEXT NOT NULL,
+    modifita_je  TEXT NOT NULL
+);
+"""
+_IDX_ALDONAJXOJ_MESAGXO = """
+CREATE INDEX IF NOT EXISTS idx_aldonajxoj_mesagxo ON aldonajxoj(mesagxo_id);
+"""
+
+# ── Signatures (CRUDService) ─────────────────────────────────────────────────
+
+_CREATE_SUBSKRIBOJ = """
+CREATE TABLE IF NOT EXISTS subskriboj (
+    uuid         TEXT PRIMARY KEY,
+    nomo         TEXT NOT NULL,
+    teksto       TEXT NOT NULL,
+    estas_html   INTEGER NOT NULL DEFAULT 0,
+    apriora      INTEGER NOT NULL DEFAULT 0,
+    kreita_je    TEXT NOT NULL,
+    modifita_je  TEXT NOT NULL
+);
+"""
+
+# ── Sieve filters (CRUDService) ──────────────────────────────────────────────
+
+_CREATE_FILTRAJ = """
+CREATE TABLE IF NOT EXISTS filtraj (
+    uuid         TEXT PRIMARY KEY,
+    nomo         TEXT NOT NULL UNIQUE,
+    sieve_kodo   TEXT NOT NULL,
+    aktiva       INTEGER NOT NULL DEFAULT 1,
+    ordo         INTEGER NOT NULL DEFAULT 0,
+    kreita_je    TEXT NOT NULL,
+    modifita_je  TEXT NOT NULL
+);
+"""
+
+# ── Spam blocks (CRUDService) ────────────────────────────────────────────────
+
+_CREATE_SPAMO_BLOKOJ = """
+CREATE TABLE IF NOT EXISTS spamo_blokoj (
+    uuid       TEXT PRIMARY KEY,
+    regulo     TEXT NOT NULL UNIQUE,
+    kreas      TEXT,
+    kreita_je  TEXT NOT NULL,
     modifita_je TEXT NOT NULL
 );
 """
 
-_CREATE_MESAGOJ = """
-CREATE TABLE IF NOT EXISTS mesaghoj (
-    uuid TEXT PRIMARY KEY,
-    konto_uuid TEXT NOT NULL,
-    foldero TEXT NOT NULL DEFAULT 'INBOX',
-    sendinto TEXT NOT NULL,
-    ricevinto TEXT NOT NULL,
-   _cc TEXT NOT NULL DEFAULT '',
-    titolo TEXT NOT NULL,
-    teksto TEXT NOT NULL DEFAULT '',
-    dato TEXT NOT NULL,
-    legita INTEGER NOT NULL DEFAULT 0,
-    kreita_je TEXT NOT NULL,
-    modifita_je TEXT NOT NULL
-);
-"""
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Contacts (kontakto)
-# ──────────────────────────────────────────────────────────────────────────────
+# ── Contacts (CRUDService + FTS5) ────────────────────────────────────────────
 
 _CREATE_KONTAKTOJ = """
 CREATE TABLE IF NOT EXISTS kontaktoj (
-    uuid TEXT PRIMARY KEY,
-    personanomo TEXT NOT NULL,
-    retposhtoadreso TEXT NOT NULL DEFAULT '',
-    telefono TEXT NOT NULL DEFAULT '',
-    organizo TEXT NOT NULL DEFAULT '',
-    kategorio TEXT NOT NULL DEFAULT '',
-    notoj TEXT NOT NULL DEFAULT '',
-    ligiloj TEXT NOT NULL DEFAULT '[]',
-    kreita_je TEXT NOT NULL,
-    modifita_je TEXT NOT NULL
+    uuid             TEXT PRIMARY KEY,
+    nomo             TEXT,
+    familia_nomo     TEXT,
+    plena_nomo       TEXT,
+    naskigx_dato     TEXT,
+    naskigx_loko     TEXT,
+    lingvoj          TEXT NOT NULL DEFAULT '[]',
+    retposto         TEXT UNIQUE,
+    organizo         TEXT,
+    organiza_identiga_numero TEXT,
+    telefonnumeroj   TEXT NOT NULL DEFAULT '[]',
+    retposhtadresoj  TEXT NOT NULL DEFAULT '[]',
+    kampoj           TEXT NOT NULL DEFAULT '{}',
+    konfirmita       INTEGER NOT NULL DEFAULT 0,
+    kategorioj       TEXT NOT NULL DEFAULT '[]',
+    noto             TEXT,
+    bildo            TEXT,
+    kreita_je        TEXT NOT NULL,
+    modifita_je      TEXT NOT NULL
 );
 """
+_IDX_KONTAKTOJ_NOMO = """
+CREATE INDEX IF NOT EXISTS idx_kontaktoj_nomo ON kontaktoj(nomo);
+"""
+_IDX_KONTAKTOJ_RETPOSTO = """
+CREATE INDEX IF NOT EXISTS idx_kontaktoj_retposto ON kontaktoj(retposto);
+"""
+
+# ── Categories (CRUDService) ─────────────────────────────────────────────────
 
 _CREATE_KATEGORIOJ = """
 CREATE TABLE IF NOT EXISTS kategorioj (
-    uuid TEXT PRIMARY KEY,
-    nomo TEXT NOT NULL,
-    koloro TEXT NOT NULL DEFAULT '',
-    kreita_je TEXT NOT NULL,
+    uuid       TEXT PRIMARY KEY,
+    nomo       TEXT NOT NULL UNIQUE,
+    koloro     TEXT NOT NULL DEFAULT '',
+    kreita_je  TEXT NOT NULL,
     modifita_je TEXT NOT NULL
 );
 """
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Indexes
-# ──────────────────────────────────────────────────────────────────────────────
+# ── Schema version tracking ──────────────────────────────────────────────────
 
-_CREATE_INDEXES = """
-CREATE INDEX IF NOT EXISTS idx_mesaghoj_konto ON mesaghoj(konto_uuid);
-CREATE INDEX IF NOT EXISTS idx_mesaghoj_dato ON mesaghoj(dato);
-CREATE INDEX IF NOT EXISTS idx_kontaktoj_retposhto ON kontaktoj(retposhtoadreso);
+_CREATE_SCHEMA_VERSION = """
+CREATE TABLE IF NOT EXISTS _schema_version (
+    version   INTEGER PRIMARY KEY,
+    applied_je TEXT NOT NULL
+);
 """
+
+# ── All DDL statements in creation order ─────────────────────────────────────
+
+_SCHEMA_STATEMENTS: list[str] = [
+    # Tables
+    _CREATE_KONTOJ,
+    _CREATE_DOSIERUJOJ,
+    _CREATE_MESAGXOJ,
+    _CREATE_ALDONAJXOJ,
+    _CREATE_SUBSKRIBOJ,
+    _CREATE_FILTRAJ,
+    _CREATE_SPAMO_BLOKOJ,
+    _CREATE_KONTAKTOJ,
+    _CREATE_KATEGORIOJ,
+    _CREATE_SCHEMA_VERSION,
+    # Indexes (must come after tables)
+    _IDX_DOSIERUJOJ_KONTO,
+    _IDX_MESAGXOJ_KONTO,
+    _IDX_MESAGXOJ_DOSIERUJO,
+    _IDX_MESAGXOJ_KONTO_UID,
+    _IDX_MESAGXOJ_MESSAGE_ID,
+    _IDX_MESAGXOJ_DATO,
+    _IDX_ALDONAJXOJ_MESAGXO,
+    _IDX_KONTAKTOJ_NOMO,
+    _IDX_KONTAKTOJ_RETPOSTO,
+]
+
+# ── FTS5 configuration for contacts ──────────────────────────────────────────
+
+KONTAKTOJ_FTS_CONFIG = FTSConfig(
+    table="kontaktoj",
+    fts_columns=[
+        "nomo",
+        "familia_nomo",
+        "plena_nomo",
+        "retposto",
+        "organizo",
+        "noto",
+    ],
+    filter_columns=["konfirmita", "kategorioj"],
+    normalize={col: fold_search_text for col in [
+        "nomo",
+        "familia_nomo",
+        "plena_nomo",
+        "retposto",
+        "organizo",
+        "noto",
+    ]},
+)
+
+# ── Database initialization ──────────────────────────────────────────────────
+
+
+def _path() -> str:
+    """Get database path using A.core.paths."""
+    return str(data_dir() / "lien.db")
 
 
 def ensure_dirs() -> None:
     """Ensure data directory exists."""
-    _ensure_dirs(_DATA_DIR)
+    _ensure_dirs()
 
 
-def get_db(path: Path = _DATA_DIR / "lien.db") -> SQLiteDB:
-    """Get database connection."""
+def get_db(path: str | None = None) -> SQLiteDB:
+    """Get database connection with all tables created.
+
+    Args:
+        path: Optional override path (default: data_dir() / lien.db)
+
+    Returns:
+        SQLiteDB instance with schema applied
+    """
     ensure_dirs()
-    db = SQLiteDB(path)
-    
-    stmts = [
-        _CREATE_KONTOJ, _CREATE_MESAGOJ,
-        _CREATE_KONTAKTOJ, _CREATE_KATEGORIOJ,
-        _CREATE_INDEXES,
-    ]
-    for stmt in stmts:
+    db = SQLiteDB(path or _path())
+
+    for stmt in _SCHEMA_STATEMENTS:
         db.execute(stmt)
-    
+
     return db
 
 
-__all__ = ["ensure_dirs", "get_db"]
+__all__ = [
+    "ensure_dirs",
+    "get_db",
+    "KONTAKTOJ_FTS_CONFIG",
+]

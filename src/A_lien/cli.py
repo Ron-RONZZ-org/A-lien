@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import typer
 
-from A import info, tr
+from A import info, tr_multi
 
 app = typer.Typer(
     name="lien",
-    help=tr(
-        "Lien — email and contacts microapp.",
-        "Lien — email and contacts microapp.",
-        "Lien — email et contacts microapp.",
+    help=tr_multi(
+        "Lien — retpoŝto kaj kontaktoj.",
+        "Lien — email and contacts.",
+        "Lien — email et contacts.",
     ),
     no_args_is_help=False,
     invoke_without_command=True,
@@ -20,8 +20,8 @@ app = typer.Typer(
 
 retposto = typer.Typer(
     name="retposto",
-    help=tr(
-        "Retpoŝto — TUI retpoŝta mikroapo.",
+    help=tr_multi(
+        "Retpoŝto — retpoŝta mikroapo.",
         "Retpoŝto — email microapp.",
         "Retpoŝto — microapp email.",
     ),
@@ -33,7 +33,7 @@ app.add_typer(retposto, name="retposto")
 
 kontakto = typer.Typer(
     name="kontakto",
-    help=tr(
+    help=tr_multi(
         "Administri kontaktojn.",
         "Manage contacts.",
         "Gérer les contacts.",
