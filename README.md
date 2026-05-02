@@ -1,5 +1,9 @@
 # A-lien
 
+## Context
+
+For architecture and API reference, see [A-workspace](./workspace/).
+
 A-lien - email and contacts microapp
 
 ## Install
