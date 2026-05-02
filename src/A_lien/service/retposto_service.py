@@ -149,6 +149,115 @@ class RetpostoService(CRUDService):
         """
         return self.list(order_by="ordo", desc=False)
 
+    # ── IMAP/SMTP sync & send ────────────────────────────────────────────────
+
+    def get_account_with_password(self, uuid: str) -> dict[str, Any] | None:
+        """Get account config with password from keyring.
+
+        Returns:
+            Account dict with password field added, or None
+        """
+        acct = self.get_account(uuid)
+        if acct is None:
+            return None
+        pw = self.get_password(uuid)
+        if pw:
+            acct["password"] = pw
+        return acct
+
+    def sync_account(self, uuid: str) -> Any:
+        """Sync messages for a single account.
+
+        Args:
+            uuid: Account UUID
+
+        Returns:
+            SyncResult from imap module
+        """
+        from A_lien.imap import sync_account as _sync
+
+        acct = self.get_account_with_password(uuid)
+        if not acct or "password" not in acct:
+            raise ValueError(f"No password for account: {uuid}")
+
+        return _sync(
+            host=acct.get("imap_servilo", ""),
+            port=acct.get("imap_haveno", 993),
+            use_ssl=acct.get("imap_ssl", 1) == 1,
+            username=acct.get("imap_uzantonomo", "") or acct.get("retposto", ""),
+            password=acct["password"],
+        )
+
+    def sync_all(self) -> dict[str, Any]:
+        """Sync messages for all accounts concurrently.
+
+        Returns:
+            Dict mapping account UUID -> SyncResult
+        """
+        from A_lien.imap import sync_accounts_concurrent
+
+        accounts = self.list_accounts()
+        enriched: list[dict[str, Any]] = []
+        for acct in accounts:
+            pw = self.get_password(acct["uuid"])
+            if pw:
+                acct["password"] = pw
+                enriched.append(acct)
+
+        return sync_accounts_concurrent(enriched)
+
+    def send_email(
+        self,
+        account_uuid: str,
+        to: list[str],
+        subject: str,
+        body: str = "",
+        cc: list[str] | None = None,
+        bcc: list[str] | None = None,
+        attachments: list[str] | None = None,
+    ) -> None:
+        """Send an email via SMTP.
+
+        Args:
+            account_uuid: Sender account UUID
+            to: Recipients
+            subject: Subject line
+            body: Plain text body
+            cc: CC recipients
+            bcc: BCC recipients
+            attachments: File paths
+
+        Raises:
+            ConnectionError, ValueError
+        """
+        from A_lien.smtp import SMTPClient
+
+        acct = self.get_account_with_password(account_uuid)
+        if not acct or "password" not in acct:
+            raise ValueError(f"No password for account: {account_uuid}")
+
+        client = SMTPClient(
+            host=acct.get("smtp_servilo", ""),
+            port=acct.get("smtp_haveno", 587),
+            use_tls=acct.get("smtp_tls", 1) == 1,
+        )
+        try:
+            client.connect(
+                username=acct.get("smtp_uzantonomo", "") or acct.get("retposto", ""),
+                password=acct["password"],
+            )
+            client.send_email(
+                from_addr=acct.get("retposto", ""),
+                to=to,
+                subject=subject,
+                body=body,
+                cc=cc,
+                bcc=bcc,
+                attachments=attachments or [],
+            )
+        finally:
+            client.disconnect()
+
     # ── Signature management (subskriboj via CRUDService) ───────────────────
 
     @property

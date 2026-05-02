@@ -185,40 +185,159 @@ def retposto_forigi_konton(
 @retposto.command("preni")
 def retposto_preni(
     account: str = typer.Option("", "--account", "-a", help="Specific account UUID"),
+    all_accounts: bool = typer.Option(False, "--all", help="Sync all accounts"),
 ) -> None:
-    """Fetch mail from accounts (TODO: Phase 4)."""
+    """Fetch mail from accounts."""
     svc = get_retposto_service()
-    accounts = [account] if account else [a["uuid"] for a in svc.list_accounts()]
 
-    if not accounts:
+    if account:
+        uuids = [account]
+    else:
+        uuids = [a["uuid"] for a in svc.list_accounts()]
+        if not uuids:
+            info(tr_multi(
+                "Neniuj kontoj. Aldonu unue per 'aldoni-konton'.",
+                "No accounts. Add one with 'aldoni-konton'.",
+                "Aucun compte. Ajoutez-en un avec 'aldoni-konton'.",
+            ))
+            return
+
+    if len(uuids) == 1:
+        info(tr_multi("Prenas mesaĝojn...", "Fetching messages...", "Récupération..."))
+        try:
+            result = svc.sync_account(uuids[0])
+            _report_sync(result)
+        except Exception as e:
+            error(str(e))
+            raise typer.Exit(1)
+    else:
         info(tr_multi(
-            "Neniuj kontoj. Aldonu unue per 'aldoni-konton'.",
-            "No accounts. Add one with 'aldoni-konton'.",
-            "Aucun compte. Ajoutez-en un avec 'aldoni-konton'.",
+            f"Prenas mesaĝojn el {len(uuids)} kontoj...",
+            f"Fetching from {len(uuids)} accounts...",
+            f"Récupération de {len(uuids)} comptes...",
         ))
-        return
+        results = svc.sync_all()
+        for uid, result in results.items():
+            info(f"  {uid[:8]}: ", nl=False)
+            _report_sync(result)
 
-    info(tr_multi(
-        "Preni mesaĝojn... (Phase 4 — TODO)",
-        "Fetching messages... (Phase 4 — TODO)",
-        "Récupération des messages... (Phase 4 — TODO)",
-    ))
-    # TODO: Phase 4 — implement IMAP sync
+
+def _report_sync(result: Any) -> None:
+    """Print sync result summary."""
+    parts = [tr_multi(f"{result.total} entute", f"{result.total} total", f"{result.total} total")]
+    if result.new:
+        parts.append(tr_multi(f"{result.new} novaj", f"{result.new} new", f"{result.new} nouveaux"))
+    if result.errors:
+        parts.append(tr_multi(f"{len(result.errors)} eraroj", f"{len(result.errors)} errors", f"{len(result.errors)} erreurs"))
+    info(", ".join(parts))
+    for err in result.errors[:3]:
+        warning(f"  {err}")
 
 
 @retposto.command("sendi")
 def retposto_sendi(
-    to: str = typer.Option(..., "--to", "-t", help="Recipient"),
+    to: str = typer.Option(..., "--to", "-t", help="Recipient (comma-separated)"),
     subject: str = typer.Option("", "--subject", "-s", help="Subject"),
     body: str = typer.Option("", "--body", "-b", help="Body text"),
+    cc: str = typer.Option("", "--cc", help="CC (comma-separated)"),
     account: str = typer.Option("", "--account", "-a", help="Account UUID"),
+    attach: list[str] = typer.Option([], "--attach", help="File to attach"),
 ) -> None:
-    """Send an email (TODO: Phase 4)."""
-    info(tr_multi(
-        f"Sendi mesaĝon al {to}... (Phase 4 — TODO)",
-        f"Sending message to {to}... (Phase 4 — TODO)",
-        f"Envoi du message à {to}... (Phase 4 — TODO)",
-    ))
+    """Send an email."""
+    svc = get_retposto_service()
+
+    if not account:
+        accounts = svc.list_accounts()
+        if not accounts:
+            error(tr_multi(
+                "Neniuj kontoj. Aldonu unue.",
+                "No accounts. Add one first.",
+                "Aucun compte. Ajoutez-en un d'abord.",
+            ))
+            raise typer.Exit(1)
+        account = accounts[0]["uuid"]
+
+    recipients = [r.strip() for r in to.split(",") if r.strip()]
+    cc_list = [r.strip() for r in cc.split(",") if r.strip()] if cc else None
+
+    try:
+        svc.send_email(
+            account_uuid=account,
+            to=recipients,
+            subject=subject,
+            body=body,
+            cc=cc_list,
+            attachments=attach or None,
+        )
+        info(tr_multi(
+            f"Mesaĝo sendita al {to}",
+            f"Message sent to {to}",
+            f"Message envoyé à {to}",
+        ))
+    except Exception as e:
+        error(tr_multi(
+            f"Sendado malsukcesis: {e}",
+            f"Send failed: {e}",
+            f"Échec d'envoi: {e}",
+        ))
+        raise typer.Exit(1)
+
+
+@retposto.command("dosierujoj")
+def retposto_dosierujoj(
+    account: str = typer.Option(..., "--account", "-a", help="Account UUID"),
+) -> None:
+    """List IMAP folders for an account."""
+    svc = get_retposto_service()
+    acct = svc.get_account_with_password(account)
+    if not acct or "password" not in acct:
+        error(tr_multi(
+            "Konto ne trovita aŭ mankas pasvorto.",
+            "Account not found or missing password.",
+            "Compte non trouvé ou mot de passe manquant.",
+        ))
+        raise typer.Exit(1)
+
+    from A_lien.imap import IMAPClient
+    client = IMAPClient(
+        host=acct.get("imap_servilo", ""),
+        port=acct.get("imap_haveno", 993),
+        use_ssl=acct.get("imap_ssl", 1) == 1,
+    )
+    try:
+        client.connect(
+            username=acct.get("imap_uzantonomo", "") or acct.get("retposto", ""),
+            password=acct["password"],
+        )
+        folders = client.list_folders()
+        for f in folders:
+            info(f"  {f['name']}")
+    except Exception as e:
+        error(str(e))
+        raise typer.Exit(1)
+    finally:
+        client.disconnect()
+
+
+@retposto.command("mesagxoj")
+def retposto_mesagxoj(
+    account: str = typer.Option(..., "--account", "-a", help="Account UUID"),
+    folder: str = typer.Option("INBOX", "--folder", "-f", help="Folder name"),
+    limit: int = typer.Option(20, "--limit", "-l", help="Max messages"),
+) -> None:
+    """List recent messages in a folder."""
+    svc = get_retposto_service()
+    # Fetch from IMAP
+    try:
+        result = svc.sync_account(account)
+        info(tr_multi(
+            f"Trovitaj {result.total} mesaĝoj (prenitaj: {result.new} novaj)",
+            f"Found {result.total} messages (fetched: {result.new} new)",
+            f"Trouvé {result.total} messages (récupérés: {result.new} nouveaux)",
+        ))
+    except Exception as e:
+        error(str(e))
+        raise typer.Exit(1)
 
 
 # ── Signature sub-typer ──────────────────────────────────────────────────────
