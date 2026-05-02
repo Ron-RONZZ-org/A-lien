@@ -2,7 +2,18 @@
 
 ## Context
 
-For architecture and API reference, see [A-workspace](./workspace/).
+This module uses [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) as a **git submodule**:
+
+
+```bash
+# Clone with submodules
+git clone --recurse-submodules https://github.com/Ron-RONZZ-org/A-lien.git
+# Or if already cloned:
+git submodule update --init --recursive
+```
+
+**DO NOT edit workspace/ directly** - see [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) for master context.
+
 
 A-lien - email and contacts microapp
 
