@@ -9,7 +9,7 @@ import typer
 
 from A import error, info, tr_multi, warning
 
-from A_lien.service import get_kontakto_service
+from A_lien.service import get_kontakto_service, get_retposto_service
 
 app = typer.Typer(
     name="lien",
@@ -50,26 +50,259 @@ app.add_typer(kontakto, name="kontakto")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# retposto subcommands (TODO — Phase 3/4)
+# retposto subcommands — account management (Phase 3)
 # ══════════════════════════════════════════════════════════════════════════════
 
 
 @retposto.command("ls")
 def retposto_ls() -> None:
     """List email accounts."""
-    info("[dim]TODO: implement retposto ls[/dim]")
+    service = get_retposto_service()
+    accounts = service.list_accounts()
+
+    if not accounts:
+        info(tr_multi(
+            "Neniuj kontoj.",
+            "No accounts.",
+            "Aucun compte.",
+        ))
+        return
+
+    for a in accounts:
+        name = a.get("nomo", "") or a.get("retposto", "")
+        email = a.get("retposto", "")
+        has_pw = tr_multi("(jes)", "(yes)", "(oui)") if service.get_password(a["uuid"]) else tr_multi("(ne)", "(no)", "(non)")
+        info(f"  {a['uuid'][:8]}  {name} — {email}  ŝlosilo:{has_pw}")
+
+
+@retposto.command("vidi")
+def retposto_vidi(
+    uuid: str = typer.Argument(..., help="Account UUID"),
+) -> None:
+    """View account details (password not shown)."""
+    service = get_retposto_service()
+    account = service.get_account(uuid)
+
+    if not account:
+        error(tr_multi(
+            f"Konto ne trovita: {uuid}",
+            f"Account not found: {uuid}",
+            f"Compte non trouvé: {uuid}",
+        ))
+        raise typer.Exit(1)
+
+    info(f"  UUID: {account['uuid']}")
+    info(f"  Nomo: {account.get('nomo', '')}")
+    info(f"  Retpoŝto: {account.get('retposto', '')}")
+    info(f"  IMAP: {account.get('imap_servilo', '')}:{account.get('imap_haveno', '993')}")
+    info(f"  SMTP: {account.get('smtp_servilo', '')}:{account.get('smtp_haveno', '587')}")
+    has_pw = service.get_password(uuid) is not None
+    info(tr_multi(
+        f"  Pasvorto: {'konservita' if has_pw else 'mankas'}",
+        f"  Password: {'stored' if has_pw else 'missing'}",
+        f"  Mot de passe: {'stocké' if has_pw else 'manquant'}",
+    ))
+    if account.get("subskribo"):
+        info(f"  Subskribo: {account['subskribo']}")
+
+
+@retposto.command("aldoni-konton")
+def retposto_aldoni_konton(
+    retposto: str = typer.Option(..., "--retposto", "-r", help="Email address"),
+    nomo: str = typer.Option("", "--nomo", "-n", help="Display name"),
+    imap_servilo: str = typer.Option("", "--imap-server", help="IMAP server"),
+    imap_haveno: int = typer.Option(993, "--imap-port", help="IMAP port"),
+    smtp_servilo: str = typer.Option("", "--smtp-server", help="SMTP server"),
+    smtp_haveno: int = typer.Option(587, "--smtp-port", help="SMTP port"),
+    password: str = typer.Option(..., "--password", "-p", prompt=True, hide_input=True, help="Account password"),
+) -> None:
+    """Add a new email account (password stored in system keyring)."""
+    service = get_retposto_service()
+
+    # Auto-fill common server patterns if not specified
+    domain = retposto.split("@")[-1] if "@" in retposto else ""
+    if not imap_servilo:
+        imap_servilo = f"imap.{domain}" if domain else ""
+    if not smtp_servilo:
+        smtp_servilo = f"smtp.{domain}" if domain else ""
+
+    if not imap_servilo or not smtp_servilo:
+        error(tr_multi(
+            "Ne eble aŭtomate detekti servilojn. Bonvolu specifii ilin.",
+            "Cannot auto-detect servers. Please specify them.",
+            "Impossible de détecter les serveurs. Veuillez les spécifier.",
+        ))
+        raise typer.Exit(1)
+
+    data = {
+        "retposto": retposto,
+        "nomo": nomo or retposto,
+        "imap_servilo": imap_servilo,
+        "imap_haveno": imap_haveno,
+        "smtp_servilo": smtp_servilo,
+        "smtp_haveno": smtp_haveno,
+        "ordo": len(service.list_accounts()),
+    }
+
+    try:
+        account = service.create_account(data, password)
+        info(tr_multi(
+            f"Konto kreita: {account['uuid'][:8]} {retposto}",
+            f"Account created: {account['uuid'][:8]} {retposto}",
+            f"Compte créé: {account['uuid'][:8]} {retposto}",
+        ))
+    except Exception as e:
+        error(tr_multi(
+            f"Eraro dum kreado de konto: {e}",
+            f"Error creating account: {e}",
+            f"Erreur lors de la création du compte: {e}",
+        ))
+        raise typer.Exit(1)
+
+
+@retposto.command("forigi-konton")
+def retposto_forigi_konton(
+    uuid: str = typer.Argument(..., help="Account UUID"),
+) -> None:
+    """Delete an email account and its password from keyring."""
+    service = get_retposto_service()
+    try:
+        service.delete_account(uuid)
+        info(tr_multi(
+            f"Konto forigita: {uuid[:8]}",
+            f"Account deleted: {uuid[:8]}",
+            f"Compte supprimé: {uuid[:8]}",
+        ))
+    except Exception as e:
+        error(tr_multi(
+            f"Eraro dum forigo: {e}",
+            f"Error deleting: {e}",
+            f"Erreur lors de la suppression: {e}",
+        ))
+        raise typer.Exit(1)
 
 
 @retposto.command("preni")
-def retposto_preni() -> None:
-    """Fetch mail from all accounts."""
-    info("[dim]TODO: implement retposto preni[/dim]")
+def retposto_preni(
+    account: str = typer.Option("", "--account", "-a", help="Specific account UUID"),
+) -> None:
+    """Fetch mail from accounts (TODO: Phase 4)."""
+    svc = get_retposto_service()
+    accounts = [account] if account else [a["uuid"] for a in svc.list_accounts()]
+
+    if not accounts:
+        info(tr_multi(
+            "Neniuj kontoj. Aldonu unue per 'aldoni-konton'.",
+            "No accounts. Add one with 'aldoni-konton'.",
+            "Aucun compte. Ajoutez-en un avec 'aldoni-konton'.",
+        ))
+        return
+
+    info(tr_multi(
+        "Preni mesaĝojn... (Phase 4 — TODO)",
+        "Fetching messages... (Phase 4 — TODO)",
+        "Récupération des messages... (Phase 4 — TODO)",
+    ))
+    # TODO: Phase 4 — implement IMAP sync
 
 
 @retposto.command("sendi")
-def retposto_sendi(to: str, subject: str) -> None:
-    """Send an email."""
-    info(f"[dim]TODO: implement retposto sendi to={to} subject={subject}[/dim]")
+def retposto_sendi(
+    to: str = typer.Option(..., "--to", "-t", help="Recipient"),
+    subject: str = typer.Option("", "--subject", "-s", help="Subject"),
+    body: str = typer.Option("", "--body", "-b", help="Body text"),
+    account: str = typer.Option("", "--account", "-a", help="Account UUID"),
+) -> None:
+    """Send an email (TODO: Phase 4)."""
+    info(tr_multi(
+        f"Sendi mesaĝon al {to}... (Phase 4 — TODO)",
+        f"Sending message to {to}... (Phase 4 — TODO)",
+        f"Envoi du message à {to}... (Phase 4 — TODO)",
+    ))
+
+
+# ── Signature sub-typer ──────────────────────────────────────────────────────
+
+subskribo_app = typer.Typer(
+    name="subskribo",
+    help=tr_multi(
+        "Administri subskribojn.",
+        "Manage signatures.",
+        "Gérer les signatures.",
+    ),
+    no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help", "--helpo"]},
+)
+retposto.add_typer(subskribo_app, name="subskribo")
+
+
+@subskribo_app.command("ls")
+def subskribo_ls() -> None:
+    """List signatures."""
+    service = get_retposto_service()
+    sigs = service.list_signatures()
+
+    if not sigs:
+        info(tr_multi(
+            "Neniuj subskriboj.",
+            "No signatures.",
+            "Aucune signature.",
+        ))
+        return
+
+    for s in sigs:
+        preview = s.get("teksto", "")[:60].replace("\n", " ")
+        html_tag = " [HTML]" if s.get("estas_html") else ""
+        default_tag = tr_multi(" [apriora]", " [default]", " [défaut]") if s.get("apriora") else ""
+        info(f"  {s['uuid'][:8]}  {s['nomo']}{html_tag}{default_tag}")
+        if preview:
+            info(f"         {preview}...")
+
+
+@subskribo_app.command("aldoni")
+def subskribo_aldoni(
+    nomo: str = typer.Argument(..., help="Signature name"),
+    teksto: str = typer.Option(..., "--teksto", "-t", help="Signature text"),
+    estas_html: bool = typer.Option(False, "--html", help="Text is HTML"),
+) -> None:
+    """Add a new signature."""
+    service = get_retposto_service()
+    try:
+        sig = service.create_signature(nomo, teksto, estas_html)
+        info(tr_multi(
+            f"Subskribo kreita: {sig['uuid'][:8]} {nomo}",
+            f"Signature created: {sig['uuid'][:8]} {nomo}",
+            f"Signature créée: {sig['uuid'][:8]} {nomo}",
+        ))
+    except Exception as e:
+        error(tr_multi(
+            f"Eraro: {e}",
+            f"Error: {e}",
+            f"Erreur: {e}",
+        ))
+        raise typer.Exit(1)
+
+
+@subskribo_app.command("forigi")
+def subskribo_forigi(
+    uuid: str = typer.Argument(..., help="Signature UUID"),
+) -> None:
+    """Delete a signature."""
+    service = get_retposto_service()
+    try:
+        service.delete_signature(uuid)
+        info(tr_multi(
+            f"Subskribo forigita: {uuid[:8]}",
+            f"Signature deleted: {uuid[:8]}",
+            f"Signature supprimée: {uuid[:8]}",
+        ))
+    except Exception as e:
+        error(tr_multi(
+            f"Eraro: {e}",
+            f"Error: {e}",
+            f"Erreur: {e}",
+        ))
+        raise typer.Exit(1)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
