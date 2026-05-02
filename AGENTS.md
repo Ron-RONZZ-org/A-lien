@@ -59,3 +59,6 @@ src/A_lien/
 - Don't hardcode paths — use `A.core.paths`
 - Don't implement utilities that should be in core
 - Don't store passwords in plain text
+## Branch Convention
+
+All A-* repos use `main` as the primary branch. Use `main` for all development.

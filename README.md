@@ -62,3 +62,6 @@ A-lien combines [autish retposto](https://github.com/Ron-RONZZ-org/autish/) and 
 ## License
 
 GPL-3.0-only
+---
+
+**Branch:** Use `main` for all development.
