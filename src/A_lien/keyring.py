@@ -1,7 +1,6 @@
 """Keyring abstraction for A-lien.
 
-Wraps the ``keyring`` library with graceful fallback when unavailable.
-Will be replaced by ``A.core.keyring`` when that exists (see A-core issue #24).
+Delegates to ``A.core.keyring`` (see A-core issue #24).
 
 Usage::
 
@@ -18,19 +17,11 @@ Keyring service pattern:
 
 from __future__ import annotations
 
+from A.core.keyring import get_password as _core_get
+from A.core.keyring import set_password as _core_set
+from A.core.keyring import delete_password as _core_del
+
 _SERVICE_PREFIX = "A-lien"
-
-
-def _keyring_available() -> bool:
-    """Check if the keyring library is available.
-
-    Checked at call time so that tests can mock ``keyring``.
-    """
-    try:
-        import keyring  # noqa: F401
-        return True
-    except ImportError:
-        return False
 
 
 def get_password(account_uuid: str) -> str | None:
@@ -42,13 +33,7 @@ def get_password(account_uuid: str) -> str | None:
     Returns:
         The stored password, or None if not found or keyring unavailable
     """
-    if not _keyring_available():
-        return None
-    try:
-        import keyring
-        return keyring.get_password(f"{_SERVICE_PREFIX}/{account_uuid}", "password")
-    except Exception:  # pragma: no cover
-        return None
+    return _core_get(f"{_SERVICE_PREFIX}/{account_uuid}", "password")
 
 
 def set_password(account_uuid: str, password: str) -> bool:
@@ -61,14 +46,7 @@ def set_password(account_uuid: str, password: str) -> bool:
     Returns:
         True if stored successfully, False if keyring unavailable
     """
-    if not _keyring_available():
-        return False
-    try:
-        import keyring
-        keyring.set_password(f"{_SERVICE_PREFIX}/{account_uuid}", "password", password)
-        return True
-    except Exception:  # pragma: no cover
-        return False
+    return _core_set(f"{_SERVICE_PREFIX}/{account_uuid}", "password", password)
 
 
 def delete_password(account_uuid: str) -> bool:
@@ -80,16 +58,7 @@ def delete_password(account_uuid: str) -> bool:
     Returns:
         True if deleted (or not found), False if keyring unavailable
     """
-    if not _keyring_available():
-        return False
-    try:
-        import keyring
-        keyring.delete_password(f"{_SERVICE_PREFIX}/{account_uuid}", "password")
-        return True
-    except keyring.errors.PasswordDeleteError:
-        return True  # Already gone — idempotent
-    except Exception:  # pragma: no cover
-        return False
+    return _core_del(f"{_SERVICE_PREFIX}/{account_uuid}", "password")
 
 
 __all__ = [

@@ -282,7 +282,7 @@ class TestKeyring:
         result = delete_password("nonexistent-uuid")
         assert result is True  # Idempotent
 
-    @patch("A_lien.keyring._keyring_available", return_value=False)
+    @patch("A.core.keyring._keyring_available", return_value=False)
     def test_fallback_when_keyring_unavailable(self, _mock_available):
         """All functions gracefully return None/False when keyring missing."""
         from A_lien.keyring import get_password, set_password, delete_password
