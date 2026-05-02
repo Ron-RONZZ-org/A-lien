@@ -38,6 +38,8 @@ python = "^3.11"
 A-core = { path = "../A-core" }
 typer = {version = ">=0.12.0", extras = ["rich"]}
 rich = ">=13.0.0"
+sievelib = ">=1.5.0"
+managesieve = ">=0.8.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
