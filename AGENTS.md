@@ -8,6 +8,7 @@ This file extends root A-core AGENTS.md for the A-lien plugin.
 - `A` package imports (i18n, output, subprocess, SQLite)
 - Plugin discovery via entry points
 - Shared utilities
+- **API Reference**: See [A-core AGENTS.md](https://github.com/Ron-RONZZ-org/A-core/blob/main/AGENTS.md#api-reference)
 
 **All source code must import from `A`, never duplicate utilities.**
 
