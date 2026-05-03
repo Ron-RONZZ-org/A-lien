@@ -202,6 +202,32 @@ lien
 - `purigi` (duplicate cleanup)
 - Polish all help text, error messages
 
+## Migration from autish
+
+A-lien supports migration from autish retposto.db:
+
+| Legacy | Target | Description |
+|--------|--------|-------------|
+| retposto.db → kontakto | A-lien → kontaktoj | Contacts (148 entries) |
+| keyring: autish-retposto-* | A-lien/* | IMAP passwords |
+
+**CLI:**
+```bash
+A migri           # Run migrations (imports contacts)
+A migri-keyring  # Migrate keyring passwords
+```
+
+**Programmatic:**
+```python
+from A_lien.data.migrate_from_autish import migrate
+result = migrate()
+```
+
+Features:
+- JSON field conversions (telefono → telefonnumeroj array)
+- Preserves timestamps
+- Idempotent (safe to run multiple times)
+
 ## Branch Convention
 
 All A-* repos use `main` as the primary branch. Use `main` for all development.

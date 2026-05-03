@@ -55,6 +55,20 @@ A-lien is a plugin for the [A](https://github.com/Ron-RONZZ-org/A-core/) framewo
 
 See the [A-core documentation](https://github.com/Ron-RONZZ-org/A-core/) for more on the framework.
 
+## Migration from autish
+
+A-lien supports migration from autish:
+
+```bash
+A migri           # Run migrations
+A migri-keyring  # Migrate keyring passwords
+```
+
+| Legacy | Target | Description |
+|--------|--------|-------------|
+| retposto.db → kontakto | A-lien → kontaktoj | Contacts |
+| keyring: autish-retposto-* | A-lien/* | IMAP passwords |
+
 ## History
 
 A-lien combines [autish retposto](https://github.com/Ron-RONZZ-org/autish/) and [autish kontakto](https://github.com/Ron-RONZZ-org/autish/) into one plugin.
