@@ -133,6 +133,13 @@ Domain ─┬─ create_account(data, password) → stores pw in keyring
 8. Use A-core `CRUDService` — never write raw SQL for CRUD operations
 9. JSON arrays for multi-value fields (consistent with A-encik)
 
+## Optional Dependency Policy
+
+When an optional dependency is missing (e.g., `keyring`):
+1. Ask user to install: prompt with `typer.confirm(..., default=True)`
+2. Install on confirmation via `pip install <pkg>`
+3. Exit gracefully if declined
+
 ## CLI Command Tree
 
 ```
