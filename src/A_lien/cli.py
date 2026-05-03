@@ -600,6 +600,9 @@ def kontakto_ls(
     desc: bool = typer.Option(False, "--desc", "-d", help="Descending order"),
 ) -> None:
     """List all contacts."""
+    from rich.console import Console
+    from rich.table import Table
+
     service = get_kontakto_service()
     contacts = service.list(order_by=order_by, desc=desc, limit=limit)
 
@@ -607,18 +610,38 @@ def kontakto_ls(
         info(tr_multi("Neniuj kontaktoj.", "No contacts.", "Aucun contact."))
         return
 
-    info(tr_multi(
-        f"Trovitaj {len(contacts)} kontakto(j):",
-        f"Found {len(contacts)} contact(s):",
-        f"{len(contacts)} contact(s) trouvé(s):",
-    ))
+    # Build table like autish-legacy
+    table = Table(title=tr_multi("Kontaktoj", "Contacts", "Contacts"))
+    table.add_column("UUID", style="dim", width=10)
+    table.add_column(tr_multi("Nomo", "Name", "Nom"))
+    table.add_column(tr_multi("Retpoŝto", "Email", "Email"))
+    table.add_column(tr_multi("Organizo", "Organization", "Organisation"))
+    table.add_column(tr_multi("Kategorioj", "Categories", "Catégories"))
+
     for c in contacts:
-        name = c.get("plena_nomo") or c.get("nomo") or "(sen nomo)"
-        email = c.get("retposto", "")
+        # Handle JSON fields
+        emails = c.get("retposhtadresoj", [])
+        if isinstance(emails, str):
+            emails = []
+        primary_email = emails[0].get("valoro", "") if emails else ""
+
+        kategorioj = c.get("kategorioj", [])
+        if isinstance(kategorioj, str):
+            kategorioj = []
+        cats = ", ".join(kategorioj) if kategorioj else ""
+
+        name = c.get("plena_nomo") or c.get("nomo") or ""
         org = c.get("organizo", "")
-        extra = f" — {email}" if email else ""
-        extra += f" ({org})" if org else ""
-        info(f"  {c['uuid'][:8]}  {name}{extra}")
+
+        table.add_row(
+            c["uuid"][:8],
+            name,
+            primary_email,
+            org or "-",
+            cats or "-",
+        )
+
+    Console().print(table)
 
 
 @kontakto.command("serci")
