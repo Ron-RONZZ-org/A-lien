@@ -17,6 +17,7 @@ from pathlib import Path
 from A.core.paths import data_dir as _data_dir
 from A.core.paths import ensure_dirs as _ensure_dirs
 from A.data.base import SQLiteDB as _SQLiteDB
+from A_lien.keyring import set_password as _set_keyring_pw
 
 import uuid
 
@@ -27,7 +28,7 @@ _LEGACY_DB = _LEGACY_DIR / "retposto.db"
 
 
 def migrate() -> dict:
-    """Migrate contacts from autish retposto.db to A-lien.
+    """Migrate contacts and email accounts from autish retposto.db to A-lien.
     
     Returns:
         Dict with migration results
@@ -44,26 +45,52 @@ def migrate() -> dict:
     # Connect to A-lien DB
     target = _SQLiteDB(str(_data_dir() / "lien.db"))
     
-    migrated = 0
-    errors = []
+    results = {
+        "contacts": {"source_rows": 0, "migrated_rows": 0, "errors": []},
+        "accounts": {"source_rows": 0, "migrated_rows": 0, "errors": []},
+    }
     
-    # Migrate contacts
-    rows = legacy.execute("SELECT * FROM kontakto").fetchall()
+    # ── Migrate contacts (verified only) ────────────────────────────────────
+    _migrate_contacts(legacy, target, results)
+    
+    # ── Migrate email accounts ──────────────────────────────────────────────
+    _migrate_accounts(legacy, target, results)
+    
+    legacy.close()
+    
+    # Flatten results for backwards compatibility
+    total_source = results["contacts"]["source_rows"] + results["accounts"]["source_rows"]
+    total_migrated = results["contacts"]["migrated_rows"] + results["accounts"]["migrated_rows"]
+    all_errors = results["contacts"]["errors"] + results["accounts"]["errors"]
+    
+    return {
+        "source_rows": total_source,
+        "migrated_rows": total_migrated,
+        "errors": all_errors,
+        "details": results,
+    }
+
+
+def _migrate_contacts(legacy: sqlite3.Connection, target: _SQLiteDB, results: dict) -> None:
+    """Migrate verified contacts only."""
+    # Check if kontakto table exists
+    tables = [r[0] for r in legacy.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+    if "kontakto" not in tables:
+        return
+    
+    rows = legacy.execute("SELECT * FROM kontakto WHERE konfirmita = 1").fetchall()
+    results["contacts"]["source_rows"] = len(rows)
     
     for row in rows:
         try:
-            # Generate new UUID (preserve old for reference)
-            old_uuid = row["uuid"]
             new_uuid = str(uuid.uuid4())
             
-            # Parse JSON fields from legacy format
             telefonnumeroj = _parse_json_field(row, "telefonnumeroj", "telefono")
             retposhtadresoj = _parse_json_field(row, "retposhtadresoj", "retposto")
             kampoj = _parse_json_field(row, "kampoj", "kampoj")
             kategorioj = _parse_json_field(row, "kategorioj", "kategorioj")
             lingvoj = _parse_json_field(row, "lingvoj", "lingvoj")
             
-            # Insert into A-lien
             now = datetime.now(timezone.utc).isoformat()
             target.execute(
                 """INSERT INTO kontaktoj (
@@ -97,18 +124,88 @@ def migrate() -> dict:
                 ),
             )
             
-            migrated += 1
+            results["contacts"]["migrated_rows"] += 1
             
         except Exception as e:
-            errors.append(f"{row['uuid']}: {e}")
+            results["contacts"]["errors"].append(f"{row['uuid']}: {e}")
+
+
+def _migrate_accounts(legacy: sqlite3.Connection, target: _SQLiteDB, results: dict) -> None:
+    """Migrate email accounts from legacy konto table."""
+    tables = [r[0] for r in legacy.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+    if "konto" not in tables:
+        return
     
-    legacy.close()
+    rows = legacy.execute("SELECT * FROM konto").fetchall()
+    results["accounts"]["source_rows"] = len(rows)
     
-    return {
-        "source_rows": len(rows),
-        "migrated_rows": migrated,
-        "errors": errors,
-    }
+    for row in rows:
+        try:
+            new_uuid = str(uuid.uuid4())
+            email = row["retposto"]
+            now = datetime.now(timezone.utc).isoformat()
+            
+            # Determine IMAP username: imap_uzantonomo > uzantonomo > email
+            imap_user = row["imap_uzantonomo"] or row["uzantonomo"] or email
+            smtp_user = row["smtp_uzantonomo"] or row["uzantonomo"] or email
+            
+            # Insert account into A-lien kontoj table
+            target.execute(
+                """INSERT INTO kontoj (
+                    uuid, ordo, nomo, retposto,
+                    imap_servilo, imap_haveno, imap_ssl,
+                    smtp_servilo, smtp_haveno, smtp_tls,
+                    imap_uzantonomo, smtp_uzantonomo,
+                    webmail_url,
+                    sieve_servilo, sieve_haveno, sieve_starttls, sieve_uzantonomo,
+                    subskribo,
+                    kreita_je, modifita_je
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    new_uuid,
+                    row["ordo"],
+                    row["nomo"],
+                    email,
+                    row["imap_servilo"],
+                    row["imap_haveno"],
+                    row["imap_ssl"],
+                    row["smtp_servilo"],
+                    row["smtp_haveno"],
+                    row["smtp_tls"],
+                    imap_user,
+                    smtp_user,
+                    row["webmail_url"],
+                    row["sieve_servilo"],
+                    row["sieve_haveno"],
+                    row["sieve_starttls"],
+                    row["sieve_uzantonomo"],
+                    row["subskribo"],
+                    now,
+                    now,
+                ),
+            )
+            
+            # Migrate keyring password: autish-retposto-{email} → A-lien/{new_uuid}
+            password = None
+            try:
+                import keyring
+                password = keyring.get_password(f"autish-retposto-{email}", "password")
+            except Exception:
+                pass
+            
+            if password:
+                _set_keyring_pw(new_uuid, password)
+                # Remove old keyring entry
+                try:
+                    import keyring
+                    keyring.delete_password(f"autish-retposto-{email}", "password")
+                except Exception:
+                    pass
+            
+            results["accounts"]["migrated_rows"] += 1
+            
+        except Exception as e:
+            results["accounts"]["errors"].append(f"{row['retposto']}: {e}")
 
 
 def _parse_json_field(row: sqlite3.Row, field: str, fallback_field: str) -> dict | list:
