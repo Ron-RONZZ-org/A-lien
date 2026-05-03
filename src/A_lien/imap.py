@@ -12,7 +12,7 @@ from email.header import decode_header
 from email.utils import parsedate_to_datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable, Protocol
 import uuid
 import json
 
@@ -43,17 +43,76 @@ def _parse_email_address(value: str) -> str:
     return value.strip()
 
 
+def _extract_sender_name(from_header: str) -> str:
+    """Extract display name from 'Name <addr@dom.ain>' form."""
+    if not from_header:
+        return ""
+    if "<" in from_header and ">" in from_header:
+        return from_header.split("<")[0].strip().strip("\"'")
+    return ""
+
+
+_NO_REPLY_PATTERNS: tuple[str, ...] = (
+    "no-reply", "noreply", "no_reply", "noreplay",
+    "noresponder", "donotreply", "do-not-reply",
+    "mailer-daemon", "mailer_daemon",
+    "notifications", "notification",
+    "nepagesu", "nepagas",
+)
+
+
+def _is_likely_temporary_local_part(local: str) -> bool:
+    """Check if local part looks like a temporary/throwaway address."""
+    if len(local) > 30:
+        return True
+    digits = sum(1 for c in local if c.isdigit())
+    if len(local) > 0 and digits / len(local) > 0.6:
+        return True
+    return False
+
+
+def should_autosave_contact(email_addr: str) -> bool:
+    """Check if an email address should be auto-saved as a contact.
+
+    Skips: no-reply, noreply, mailer-daemon, long random local-parts, etc.
+    """
+    addr = _parse_email_address(email_addr)
+    if "@" not in addr:
+        return False
+    local, _domain = addr.split("@", 1)
+    local_low = local.lower()
+    if any(pat in local_low for pat in _NO_REPLY_PATTERNS):
+        return False
+    if _is_likely_temporary_local_part(local_low):
+        return False
+    return True
+
+
 def _parse_address_list(value: str) -> list[str]:
     """Parse a list of email addresses from a header value."""
     if not value:
         return []
-    # Simple split by comma — good enough for most cases
     results = []
     for part in value.split(","):
         addr = _parse_email_address(part.strip())
         if addr:
             results.append(addr)
     return results
+
+
+# ── Storage protocol ─────────────────────────────────────────────────────────
+
+
+class MessageStore(Protocol):
+    """Interface for message persistence during IMAP sync."""
+
+    def get_known_uids(self, konto_id: str, dosierujo_id: str) -> set[str]:
+        """Return set of known IMAP UIDs for an account+folder combination."""
+        ...
+
+    def store_message(self, data: dict[str, Any]) -> str:
+        """Persist a parsed message dict. Return the stored message UUID."""
+        ...
 
 
 # ── Sync result ──────────────────────────────────────────────────────────────
@@ -137,7 +196,6 @@ class IMAPClient:
                 if not line:
                     continue
                 decoded = line.decode("utf-8", errors="replace")
-                # IMAP LIST format: (\\Flags) "/" "Folder Name"
                 parts = decoded.split('"')
                 if len(parts) >= 3:
                     flags_str = parts[0].strip("() ")
@@ -151,14 +209,28 @@ class IMAPClient:
             pass
         return result
 
+    def _ensure_folder(
+        self, konto_id: str, folder_name: str, db_store: MessageStore,
+    ) -> str:
+        """Ensure folder exists in local DB, return its UUID."""
+        # This should be handled by the service layer
+        # For now, generate a stable UUID from konto_id + folder_name
+        return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{konto_id}/{folder_name}"))
+
     def sync_folder(
-        self, folder: str, db_store: Any | None = None,
+        self,
+        folder: str,
+        konto_id: str,
+        dosierujo_id: str,
+        db_store: MessageStore,
     ) -> SyncResult:
-        """Sync messages in a single folder.
+        """Sync messages in a single folder, storing new ones.
 
         Args:
             folder: IMAP folder name (e.g., 'INBOX')
-            db_store: Optional Storage instance for persisting messages
+            konto_id: Account UUID
+            dosierujo_id: Folder UUID in local DB
+            db_store: Object with get_known_uids() and store_message()
 
         Returns:
             SyncResult with counts
@@ -171,7 +243,10 @@ class IMAPClient:
                 result.errors.append(f"Cannot select folder: {folder}")
                 return result
 
-            # Search for all messages
+            # Get known UIDs to skip already-synced messages
+            known_uids = db_store.get_known_uids(konto_id, dosierujo_id)
+
+            # Fetch all message UIDs
             typ, msg_ids = self.conn.search(None, "ALL")
             if typ != "OK":
                 return result
@@ -182,9 +257,10 @@ class IMAPClient:
             if not ids:
                 return result
 
-            # Fetch FLAGS and BODY[HEADER] for all messages
+            # Fetch FLAGS and full BODY for ALL messages (we need the body)
+            # Use BODY.PEEK to avoid marking messages as read
             typ, fetch_data = self.conn.fetch(
-                b",".join(ids), "(FLAGS BODY.PEEK[HEADER])"
+                b",".join(ids), "(FLAGS BODY.PEEK[])",
             )
             if typ != "OK":
                 return result
@@ -195,10 +271,27 @@ class IMAPClient:
                 try:
                     raw_data = fetch_data[i][1]
                     msg = email_lib.message_from_bytes(raw_data)
-                    self._store_message(folder, msg, db_store)
+
+                    imap_uid = _decode_mime_header(msg.get("Message-ID", ""))
+                    if not imap_uid:
+                        # Fallback: use a hash of the raw message
+                        imap_uid = str(uuid.uuid5(
+                            uuid.NAMESPACE_DNS, str(hash(raw_data)),
+                        ))
+
+                    # Only store new messages
+                    if imap_uid in known_uids:
+                        result.total -= 1  # counted but not new
+                        continue
+
+                    self._store_message(
+                        folder, msg, konto_id, dosierujo_id,
+                        imap_uid, db_store,
+                    )
                     result.new += 1
+
                 except Exception as e:
-                    result.errors.append(f"Parse error: {e}")
+                    result.errors.append(f"Parse/store error: {e}")
 
             self.conn.close()
         except Exception as e:
@@ -207,20 +300,26 @@ class IMAPClient:
         return result
 
     def _store_message(
-        self, folder: str, msg: Any, db_store: Any | None,
-    ) -> dict[str, Any] | None:
-        """Parse and store a single email message."""
-        if db_store is None:
-            return None
+        self,
+        folder: str,
+        msg: Any,
+        konto_id: str,
+        dosierujo_id: str,
+        imap_uid: str,
+        db_store: MessageStore,
+    ) -> str | None:
+        """Parse a single email and store it via db_store.
 
+        Returns:
+            Stored message UUID, or None if skipped.
+        """
         now = datetime.now(timezone.utc).isoformat()
         message_id = _decode_mime_header(msg.get("Message-ID", ""))
         in_reply_to = _decode_mime_header(msg.get("In-Reply-To", ""))
         references = _decode_mime_header(msg.get("References", ""))
 
-        # Parse headers
         subject = _decode_mime_header(msg.get("Subject", ""))
-        from_addr = _decode_mime_header(msg.get("From", ""))
+        from_header = _decode_mime_header(msg.get("From", ""))
         to_raw = _decode_mime_header(msg.get("To", ""))
         cc_raw = _decode_mime_header(msg.get("Cc", ""))
         date_str = msg.get("Date", "")
@@ -234,7 +333,7 @@ class IMAPClient:
             except Exception:
                 pass
 
-        # Get plain text body
+        # Extract plain text and HTML body
         body = ""
         html_body = ""
         if msg.is_multipart():
@@ -256,15 +355,15 @@ class IMAPClient:
                 charset = msg.get_content_charset() or "utf-8"
                 body = payload.decode(charset, errors="replace")
 
-        data = {
+        data: dict[str, Any] = {
             "uuid": str(uuid.uuid4()),
-            "konto_id": "",
-            "dosierujo_id": "",
+            "konto_id": konto_id,
+            "dosierujo_id": dosierujo_id,
             "message_id": message_id,
             "in_reply_to": in_reply_to,
             "references_hdr": references,
-            "uid": "",
-            "de": from_addr,
+            "uid": imap_uid,
+            "de": from_header,
             "al": json.dumps(_parse_address_list(to_raw), ensure_ascii=False),
             "kc": json.dumps(_parse_address_list(cc_raw), ensure_ascii=False),
             "bkc": "[]",
@@ -283,7 +382,8 @@ class IMAPClient:
             "modifita_je": now,
         }
 
-        return data
+        stored_uuid = db_store.store_message(data)
+        return stored_uuid
 
 
 # ── Account-level sync ───────────────────────────────────────────────────────
@@ -292,6 +392,8 @@ class IMAPClient:
 def sync_account(
     host: str, port: int, use_ssl: bool,
     username: str, password: str,
+    konto_id: str,
+    db_store: MessageStore,
     folders: list[str] | None = None,
 ) -> SyncResult:
     """Sync all messages from an IMAP account.
@@ -302,6 +404,8 @@ def sync_account(
         use_ssl: Use SSL
         username: Login username
         password: Login password
+        konto_id: Account UUID for DB lookups
+        db_store: Object with get_known_uids() and store_message()
         folders: Specific folders to sync (None = all)
 
     Returns:
@@ -316,7 +420,13 @@ def sync_account(
         target_folders = folders or [f["name"] for f in available]
 
         for folder_name in target_folders:
-            fr = client.sync_folder(folder_name)
+            # Generate a stable folder UUID (service layer should manage this)
+            dosierujo_id = str(uuid.uuid5(
+                uuid.NAMESPACE_DNS, f"{konto_id}/{folder_name}",
+            ))
+            fr = client.sync_folder(
+                folder_name, konto_id, dosierujo_id, db_store,
+            )
             result.total += fr.total
             result.new += fr.new
             result.updated += fr.updated
@@ -334,17 +444,20 @@ def sync_accounts_concurrent(
     """Sync multiple accounts concurrently using ThreadPoolExecutor.
 
     Args:
-        accounts: List of account dicts with connection info
+        accounts: List of account dicts with connection info.
+                  Each must include: host, port, use_ssl, username, password,
+                  uuid, db_store (MessageStore)
         max_workers: Max concurrent connections
 
     Returns:
-        Dict mapping account identifier -> SyncResult
+        Dict mapping account UUID -> SyncResult
     """
     results: dict[str, SyncResult] = {}
 
     def _sync_one(acct: dict[str, Any]) -> tuple[str, SyncResult]:
         uid = acct.get("uuid", "?")
         pw = acct.get("password", "")
+        db_store = acct.get("db_store")
         try:
             sr = sync_account(
                 host=acct.get("imap_servilo", ""),
@@ -352,6 +465,8 @@ def sync_accounts_concurrent(
                 use_ssl=acct.get("imap_ssl", 1) == 1,
                 username=acct.get("imap_uzantonomo", "") or acct.get("retposto", ""),
                 password=pw,
+                konto_id=uid,
+                db_store=db_store,
             )
             return uid, sr
         except Exception as e:
@@ -371,6 +486,11 @@ def sync_accounts_concurrent(
 __all__ = [
     "IMAPClient",
     "SyncResult",
+    "MessageStore",
     "sync_account",
     "sync_accounts_concurrent",
+    "should_autosave_contact",
+    "_parse_email_address",
+    "_extract_sender_name",
+    "_NO_REPLY_PATTERNS",
 ]

@@ -7,24 +7,35 @@ Passwords stored in system keyring (never in SQLite).
 from __future__ import annotations
 
 import json
+import uuid as uuid_mod
 from datetime import datetime, timezone
 from typing import Any
 
 from A.core.service import CRUDService
 
 from A_lien.data.storage import get_db
+from A_lien.imap import (
+    MessageStore,
+    SyncResult,
+    should_autosave_contact,
+    _parse_email_address,
+    _extract_sender_name,
+)
 from A_lien.keyring import get_password as _get_keyring_pw
 from A_lien.keyring import set_password as _set_keyring_pw
 from A_lien.keyring import delete_password as _del_keyring_pw
+from A_lien.service.kontakto_service import get_kontakto_service
 
 _retposto_service: RetpostoService | None = None
 
 
-class RetpostoService(CRUDService):
+class RetpostoService(CRUDService, MessageStore):
     """Email account management with keyring password storage.
 
     Features:
     - Account CRUD (create, update, delete) with keyring password integration
+    - Message sync (IMAP) with dedup and auto-contact creation
+    - Email send (SMTP) with sent-message storage and auto-contact creation
     - Signature management (CRUD on subskriboj table)
     - Password never stored in database — only in OS keyring
     """
@@ -33,130 +44,184 @@ class RetpostoService(CRUDService):
         """Initialize with kontoj table, no FTS5, undo=5."""
         super().__init__(db, "kontoj", undo_size=5)
 
+    # ── MessageStore protocol implementation ──────────────────────────────────
+
+    def get_known_uids(self, konto_id: str, dosierujo_id: str) -> set[str]:
+        """Get set of already-synced IMAP UIDs for an account+folder.
+
+        Args:
+            konto_id: Account UUID
+            dosierujo_id: Folder UUID
+
+        Returns:
+            Set of UID strings (message_id / IMAP UID)
+        """
+        rows = self.db.execute(
+            "SELECT uid FROM mesagxoj WHERE konto_id = ? AND dosierujo_id = ?",
+            (konto_id, dosierujo_id),
+        )
+        return {r["uid"] for r in rows if r.get("uid")}
+
+    def store_message(self, data: dict[str, Any]) -> str:
+        """Insert a parsed message into mesagxoj table.
+
+        Args:
+            data: Parsed message dict
+
+        Returns:
+            Stored message UUID
+        """
+        msg_uuid = data.get("uuid") or str(uuid_mod.uuid4())
+        self.db.execute(
+            """INSERT OR IGNORE INTO mesagxoj
+               (uuid, konto_id, dosierujo_id, message_id, in_reply_to,
+                references_hdr, uid, de, al, kc, bkc,
+                subjekto, korpo, html_korpo,
+                prioritato, legita, stelo, spamo, forigita,
+                aldonajxoj, etikedoj, ricevita_je,
+                kreita_je, modifita_je)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                msg_uuid,
+                data.get("konto_id", ""),
+                data.get("dosierujo_id", ""),
+                data.get("message_id", ""),
+                data.get("in_reply_to", ""),
+                data.get("references_hdr", ""),
+                data.get("uid", ""),
+                data.get("de", ""),
+                data.get("al", "[]"),
+                data.get("kc", "[]"),
+                data.get("bkc", "[]"),
+                data.get("subjekto", ""),
+                data.get("korpo", ""),
+                data.get("html_korpo", ""),
+                data.get("prioritato", 5),
+                int(data.get("legita", 0)),
+                int(data.get("stelo", 0)),
+                int(data.get("spamo", 0)),
+                int(data.get("forigita", 0)),
+                data.get("aldonajxoj", "[]"),
+                data.get("etikedoj", "[]"),
+                data.get("ricevita_je", ""),
+                data.get("kreita_je", ""),
+                data.get("modifita_je", ""),
+            ),
+        )
+        return msg_uuid
+
+    # ── Auto-contact helpers ──────────────────────────────────────────────────
+
+    def _upsert_contact_from_email(
+        self, email_addr: str, display_name: str = "",
+    ) -> None:
+        """Create or update a contact from an email address.
+
+        Skips no-reply / temporary addresses.
+        If a contact with this email already exists, updates the name.
+        Otherwise creates a new contact.
+
+        Args:
+            email_addr: Raw From header (e.g. 'Name <addr@dom.ain>')
+            display_name: Optional display name
+        """
+        addr = _parse_email_address(email_addr)
+        if not addr or not should_autosave_contact(email_addr):
+            return
+
+        kontakto = get_kontakto_service()
+        name = display_name or _extract_sender_name(email_addr) or addr.split("@")[0]
+
+        existing = kontakto.find_by_email(addr)
+        if existing:
+            # Update name if we have one and contact doesn't have a full name
+            if name and not existing.get("plena_nomo"):
+                kontakto.update(existing["uuid"], {"plena_nomo": name})
+        else:
+            kontakto.create({
+                "plena_nomo": name,
+                "retposhtadresoj": json.dumps(
+                    [{"valoro": addr}],
+                    ensure_ascii=False,
+                ),
+            })
+
+    def _autosave_sync_contacts(self, konto_id: str) -> None:
+        """Auto-create contacts from senders of newly synced, unseen messages.
+
+        Args:
+            konto_id: Account UUID whose messages to scan
+        """
+        rows = self.db.execute(
+            """SELECT de FROM mesagxoj
+               WHERE konto_id = ? AND legita = 0
+               ORDER BY ricevita_je DESC LIMIT 100""",
+            (konto_id,),
+        )
+        seen = set()
+        for row in rows:
+            sender = (row.get("de") or "").strip()
+            if sender and sender not in seen:
+                seen.add(sender)
+                self._upsert_contact_from_email(sender)
+
     # ── Keyring password helpers ────────────────────────────────────────────
 
     @staticmethod
     def _keyring_service(account_uuid: str) -> str:
-        """Keyring service name for an account."""
         return f"A-lien/{account_uuid}"
 
     @staticmethod
     def get_password(account_uuid: str) -> str | None:
-        """Retrieve account password from system keyring.
-
-        Args:
-            account_uuid: Account identifier (UUID)
-
-        Returns:
-            Stored password, or None if not found
-        """
+        """Retrieve account password from system keyring."""
         return _get_keyring_pw(account_uuid)
 
     @staticmethod
     def set_password(account_uuid: str, password: str) -> bool:
-        """Store account password in system keyring.
-
-        Args:
-            account_uuid: Account identifier (UUID)
-            password: Password to store
-
-        Returns:
-            True if stored successfully
-        """
+        """Store account password in system keyring."""
         return _set_keyring_pw(account_uuid, password)
 
     @staticmethod
     def delete_password(account_uuid: str) -> bool:
-        """Remove account password from system keyring.
-
-        Args:
-            account_uuid: Account identifier (UUID)
-
-        Returns:
-            True if removed (or not found)
-        """
+        """Remove account password from system keyring."""
         return _del_keyring_pw(account_uuid)
 
     # ── Account CRUD ────────────────────────────────────────────────────────
 
     def create_account(self, data: dict[str, Any], password: str) -> dict[str, Any]:
-        """Create a new email account with password in keyring.
-
-        Args:
-            data: Account configuration (all fields except pasvorto)
-            password: Account password (stored in keyring, NOT in DB)
-
-        Returns:
-            Created account dict (without password)
-        """
-        # Ensure no password field leaks to DB
+        """Create a new email account with password in keyring."""
         data.pop("pasvorto", None)
-
         account = self.create(data)
-
-        # Store password in keyring
         self.set_password(account["uuid"], password)
-
         return account
 
     def update_account(
         self, uuid: str, data: dict[str, Any], password: str | None = None
     ) -> dict[str, Any]:
-        """Update account, optionally updating keyring password.
-
-        Args:
-            uuid: Account UUID
-            data: Fields to update
-            password: New password (None = keep existing)
-
-        Returns:
-            Updated account dict
-        """
+        """Update account, optionally updating keyring password."""
         data.pop("pasvorto", None)
-
         account = self.update(uuid, data)
-
         if password is not None:
             self.set_password(uuid, password)
-
         return account
 
     def delete_account(self, uuid: str) -> None:
-        """Delete account and remove password from keyring.
-
-        Args:
-            uuid: Account UUID
-        """
+        """Delete account and remove password from keyring."""
         self.delete(uuid, soft=True)
         self.delete_password(uuid)
 
     def get_account(self, uuid: str) -> dict[str, Any] | None:
-        """Get account details (password never included).
-
-        Args:
-            uuid: Account UUID
-
-        Returns:
-            Account dict or None
-        """
+        """Get account details (password never included)."""
         return self.get(uuid)
 
     def list_accounts(self) -> list[dict[str, Any]]:
-        """List all accounts (password never included).
-
-        Returns:
-            List of account dicts
-        """
+        """List all accounts (password never included)."""
         return self.list(order_by="ordo", desc=False)
 
     # ── IMAP/SMTP sync & send ────────────────────────────────────────────────
 
     def get_account_with_password(self, uuid: str) -> dict[str, Any] | None:
-        """Get account config with password from keyring.
-
-        Returns:
-            Account dict with password field added, or None
-        """
+        """Get account config with password from keyring."""
         acct = self.get_account(uuid)
         if acct is None:
             return None
@@ -166,7 +231,7 @@ class RetpostoService(CRUDService):
         return acct
 
     def sync_account(self, uuid: str) -> Any:
-        """Sync messages for a single account.
+        """Sync messages for a single account, auto-creating contacts from senders.
 
         Args:
             uuid: Account UUID
@@ -180,16 +245,24 @@ class RetpostoService(CRUDService):
         if not acct or "password" not in acct:
             raise ValueError(f"No password for account: {uuid}")
 
-        return _sync(
+        result = _sync(
             host=acct.get("imap_servilo", ""),
             port=acct.get("imap_haveno", 993),
             use_ssl=acct.get("imap_ssl", 1) == 1,
             username=acct.get("imap_uzantonomo", "") or acct.get("retposto", ""),
             password=acct["password"],
+            konto_id=uuid,
+            db_store=self,
         )
 
+        # Auto-create contacts from senders of new, unseen messages
+        if result.new > 0:
+            self._autosave_sync_contacts(uuid)
+
+        return result
+
     def sync_all(self) -> dict[str, Any]:
-        """Sync messages for all accounts concurrently.
+        """Sync messages for all accounts concurrently, auto-creating contacts.
 
         Returns:
             Dict mapping account UUID -> SyncResult
@@ -202,9 +275,17 @@ class RetpostoService(CRUDService):
             pw = self.get_password(acct["uuid"])
             if pw:
                 acct["password"] = pw
+                acct["db_store"] = self
                 enriched.append(acct)
 
-        return sync_accounts_concurrent(enriched)
+        results = sync_accounts_concurrent(enriched)
+
+        # Auto-create contacts for each account
+        for acct_uuid in results:
+            if results[acct_uuid].new > 0:
+                self._autosave_sync_contacts(acct_uuid)
+
+        return results
 
     def send_email(
         self,
@@ -216,7 +297,7 @@ class RetpostoService(CRUDService):
         bcc: list[str] | None = None,
         attachments: list[str] | None = None,
     ) -> None:
-        """Send an email via SMTP.
+        """Send an email via SMTP, save a copy, and auto-create contacts.
 
         Args:
             account_uuid: Sender account UUID
@@ -236,6 +317,10 @@ class RetpostoService(CRUDService):
         if not acct or "password" not in acct:
             raise ValueError(f"No password for account: {account_uuid}")
 
+        sender_email = acct.get("retposto", "")
+        cc = cc or []
+        bcc = bcc or []
+
         client = SMTPClient(
             host=acct.get("smtp_servilo", ""),
             port=acct.get("smtp_haveno", 587),
@@ -243,11 +328,11 @@ class RetpostoService(CRUDService):
         )
         try:
             client.connect(
-                username=acct.get("smtp_uzantonomo", "") or acct.get("retposto", ""),
+                username=acct.get("smtp_uzantonomo", "") or sender_email,
                 password=acct["password"],
             )
             client.send_email(
-                from_addr=acct.get("retposto", ""),
+                from_addr=sender_email,
                 to=to,
                 subject=subject,
                 body=body,
@@ -258,30 +343,52 @@ class RetpostoService(CRUDService):
         finally:
             client.disconnect()
 
+        # Auto-create contacts from recipients
+        all_recipients = to + cc + bcc
+        for addr in all_recipients:
+            if should_autosave_contact(addr):
+                self._upsert_contact_from_email(addr)
+
+        # Save a copy of sent message
+        now = datetime.now(timezone.utc).isoformat()
+        self.store_message({
+            "konto_id": account_uuid,
+            "dosierujo_id": "",
+            "message_id": f"sent-{uuid_mod.uuid4()}",
+            "in_reply_to": "",
+            "references_hdr": "",
+            "uid": f"sent-{uuid_mod.uuid4()}",
+            "de": sender_email,
+            "al": json.dumps(to, ensure_ascii=False),
+            "kc": json.dumps(cc, ensure_ascii=False),
+            "bkc": json.dumps(bcc, ensure_ascii=False),
+            "subjekto": subject,
+            "korpo": body,
+            "html_korpo": "",
+            "prioritato": 5,
+            "legita": 1,
+            "stelo": 0,
+            "spamo": 0,
+            "forigita": 0,
+            "aldonajxoj": "[]",
+            "etikedoj": "[]",
+            "ricevita_je": now,
+            "kreita_je": now,
+            "modifita_je": now,
+        })
+
     # ── Signature management (subskriboj via CRUDService) ───────────────────
 
     @property
     def _signatures(self) -> CRUDService:
-        """Get CRUDService for subskriboj table (instance-level)."""
         return CRUDService(self.db, "subskriboj")
 
     def list_signatures(self) -> list[dict[str, Any]]:
-        """List all signatures."""
         return self._signatures.list(order_by="nomo", desc=False)
 
     def create_signature(
         self, nomo: str, teksto: str, estas_html: bool = False
     ) -> dict[str, Any]:
-        """Create a new signature.
-
-        Args:
-            nomo: Display name
-            teksto: Signature text (plain text or HTML)
-            estas_html: Whether text is HTML
-
-        Returns:
-            Created signature dict
-        """
         return self._signatures.create({
             "nomo": nomo,
             "teksto": teksto,
@@ -289,15 +396,12 @@ class RetpostoService(CRUDService):
         })
 
     def get_signature(self, uuid: str) -> dict[str, Any] | None:
-        """Get a signature by UUID."""
         return self._signatures.get(uuid)
 
     def update_signature(self, uuid: str, data: dict[str, Any]) -> dict[str, Any]:
-        """Update a signature."""
         return self._signatures.update(uuid, data)
 
     def delete_signature(self, uuid: str) -> None:
-        """Delete a signature."""
         self._signatures.delete(uuid, soft=True)
 
 
