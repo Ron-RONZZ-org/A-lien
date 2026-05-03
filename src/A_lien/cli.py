@@ -748,12 +748,20 @@ def kontakto_aldoni(
     plena_nomo: str = typer.Option("", "--plena-nomo", "--pn", help=tr_multi("Plena nomo", "Full name", "Nom complet")),
     retposto_opt: str = typer.Option("", "--retposto", "-r", help=tr_multi("Ĉefa retpoŝto", "Primary email", "Email principal")),
     organizo: str = typer.Option("", "--organizo", "-o", help=tr_multi("Organizo", "Organization", "Organisation")),
-    telefono: str = typer.Option("", "--telefono", "-t", help=tr_multi("Telefonnumero", "Phone number", "Téléphone")),
+    naskig_dato: str = typer.Option("", "--naskig-dato", "-d", help=tr_multi("Naskiĝdato (YYYYMMDD)", "Birthdate (YYYYMMDD)", "Date de naissance (YYYYMMDD)")),
+    naskig_loko: str = typer.Option("", "--naskig-loko", "-L", help=tr_multi("Naskiĝloko", "Birthplace", "Lieu de naissance")),
+    lingvoj: str = typer.Option("", "--lingvoj", "-l", help=tr_multi("Lingvoj (ekz. en,fr)", "Languages (e.g. en,fr)", "Langues (ex: en,fr)")),
+    organiza_identiga_numero: str = typer.Option("", "--organiza-identiga-numero", "-I", help=tr_multi("Organiza identiga numero", "Organization ID number", "Numéro d'identification de l'organisation")),
+    telefonnumeroj: list[str] = typer.Option([], "--telefonnumero", "-t", help=tr_multi("Ripeti telefonnumeron: NOMO:etikedo[:prima]", "Repeat phone: NUMBER:label[:primary]", "Répéter téléphone: NUMÉRO:étiquette[:principal]")),
+    retposhtadresoj: list[str] = typer.Option([], "--retposhtadreso", help=tr_multi("Ripeti retpoŝton: ADRESO:etikedo[:prima]", "Repeat email: ADDRESS:label[:primary]", "Répéter email: ADRESSE:étiquette[:principal]")),
+    postadreso: str = typer.Option("", "--postadreso", "-p", help=tr_multi("Poŝtadreso", "Postal address", "Adresse postale")),
+    kampo: list[str] = typer.Option([], "--kampo", "-c", help=tr_multi("Propra kampo KEY:VALUE (ripetebla)", "Custom field KEY:value (repeatable)", "Champ personnalisé KEY:VALUE (répétable)")),
     noto: str = typer.Option("", "--noto", "-N", help=tr_multi("Notoj", "Notes", "Notes")),
-    kategorio: str = typer.Option("", "--kategorio", "-k", help=tr_multi("Kategorio", "Category", "Catégorie")),
+    kategorio: list[str] = typer.Option([], "--kategorio", "-k", help=tr_multi("Kategorio (ripetebla)", "Category (repeatable)", "Catégorie (répétable)")),
+    konfirmita: int = typer.Option(1, "--konfirmita", "-K", help=tr_multi("Ĉu konfirmita (0/1)", "Whether confirmed (0/1)", "Confirmé ou non (0/1)")),
 ) -> None:
     """Add a new contact."""
-    from A_lien.utils import split_full_name
+    from A_lien.utils import split_full_name, normalize_multi_field
 
     service = get_kontakto_service()
 
@@ -779,11 +787,43 @@ def kontakto_aldoni(
         "noto": noto,
     }
 
-    if telefono:
-        data["telefonnumeroj"] = [{"valoro": telefono, "etikedo": "VOICE", "cxefa": True}]
+    # Handle optional fields
+    if naskig_dato:
+        data["naskigx_dato"] = naskig_dato
+    if naskig_loko:
+        data["naskigx_loko"] = naskig_loko
+    if lingvoj:
+        data["lingvoj"] = [l.strip() for l in lingvoj.split(",") if l.strip()]
+    if organiza_identiga_numero:
+        data["organiza_identiga_numero"] = organiza_identiga_numero
+    if postadreso:
+        data["postadreso"] = postadreso
 
+    # Handle repeatable phone numbers: numero:etikedo[:prima]
+    if telefonnumeroj:
+        data["telefonnumeroj"] = normalize_multi_field(telefonnumeroj, "telefono")
+
+    # Handle repeatable email addresses: adreso:etikedo[:prima]
+    if retposhtadresoj:
+        data["retposhtadresoj"] = normalize_multi_field(retposhtadresoj, "retposhto")
+
+    # Handle custom fields: KEY:VALUE
+    if kampo:
+        kampoj = {}
+        for kv in kampo:
+            if ":" in kv:
+                key, _, val = kv.partition(":")
+                kampoj[key.strip()] = val.strip()
+        if kampoj:
+            data["kampoj"] = kampoj
+
+    # Handle categories
     if kategorio:
-        data["kategorioj"] = [kategorio]
+        data["kategorioj"] = kategorio
+
+    # Handle confirmed flag
+    if konfirmita is not None:
+        data["konfirmita"] = konfirmita
 
     # Remove empty values
     data = {k: v for k, v in data.items() if v}
