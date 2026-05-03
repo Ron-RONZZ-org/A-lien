@@ -6,6 +6,7 @@ Each test gets its own service injected as the global singleton.
 
 from __future__ import annotations
 
+from pathlib import Path
 import tempfile
 from unittest.mock import patch
 
@@ -15,6 +16,14 @@ from typer.testing import CliRunner
 from A_lien.cli import app, kontakto
 from A_lien.data.storage import get_db
 from A_lien.service.kontakto_service import KontaktoService, get_kontakto_service
+
+
+@pytest.fixture(autouse=True)
+def isolate_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Isolate database to tmp_path to prevent leaking test data."""
+    import A_lien.data.storage as storage_module
+    monkeypatch.setattr(storage_module, "_DATA_DIR", tmp_path)
+    monkeypatch.setattr(storage_module, "_DB_FILE", tmp_path / "lien.db")
 
 
 @pytest.fixture
