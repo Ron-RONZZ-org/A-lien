@@ -23,6 +23,9 @@ lien = "A_lien.cli:app"
 retposto = "A_lien.cli:retposto"
 kontakto = "A_lien.cli:kontakto"
 
+[project.entry-points."A.migrations"]
+A-lien = "A_lien.data.migration_register:register"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/A_lien"]
 

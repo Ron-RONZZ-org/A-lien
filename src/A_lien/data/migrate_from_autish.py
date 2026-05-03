@@ -71,7 +71,7 @@ def migrate() -> dict:
                     naskigx_dato, naskigx_loko, lingvoj,
                     retposto, organizo, organiza_identiga_numero,
                     telefonnumeroj, retposhtadresoj, kampoj,
-                    konfirmita, kategorioj, noto,
+                    konfirmita, kategorioj, noto, bildo,
                     kreita_je, modifita_je
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
@@ -91,6 +91,7 @@ def migrate() -> dict:
                     row["konfirmita"],
                     json.dumps(kategorioj),
                     row["noto"],
+                    row["bildo"] if "bildo" in row.keys() else "",
                     now,
                     now,
                 ),
@@ -99,7 +100,7 @@ def migrate() -> dict:
             migrated += 1
             
         except Exception as e:
-            errors.append(f"{row.get('uuid', 'unknown')}: {e}")
+            errors.append(f"{row['uuid']}: {e}")
     
     legacy.close()
     
