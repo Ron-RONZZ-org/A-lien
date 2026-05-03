@@ -16,7 +16,7 @@ from pathlib import Path
 
 from A.core.paths import data_dir as _data_dir
 from A.core.paths import ensure_dirs as _ensure_dirs
-from A.data.base import SQLiteDB as _SQLiteDB
+from A_lien.data.storage import get_db as _get_db
 from A_lien.keyring import set_password as _set_keyring_pw
 
 import uuid
@@ -42,8 +42,8 @@ def migrate() -> dict:
     legacy = sqlite3.connect(str(_LEGACY_DB))
     legacy.row_factory = sqlite3.Row
     
-    # Connect to A-lien DB
-    target = _SQLiteDB(str(_data_dir() / "lien.db"))
+    # Connect to A-lien DB (creates tables via get_db())
+    target = _get_db()
     
     results = {
         "contacts": {"source_rows": 0, "migrated_rows": 0, "errors": []},
