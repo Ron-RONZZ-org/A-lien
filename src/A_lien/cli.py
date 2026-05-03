@@ -600,8 +600,7 @@ def kontakto_ls(
     desc: bool = typer.Option(False, "--desc", "-d", help=tr_multi("Malkreska ordo", "Descending order", "Ordre décroissant")),
 ) -> None:
     """List all contacts."""
-    from rich.console import Console
-    from rich.table import Table
+    from A.utils.output import print_table
 
     service = get_kontakto_service()
     contacts = service.list(order_by=order_by, desc=desc, limit=limit)
@@ -610,38 +609,28 @@ def kontakto_ls(
         info(tr_multi("Neniuj kontaktoj.", "No contacts.", "Aucun contact."))
         return
 
-    # Build table like autish-legacy
-    table = Table(title=tr_multi("Kontaktoj", "Contacts", "Contacts"))
-    table.add_column("UUID", style="dim", width=10)
-    table.add_column(tr_multi("Nomo", "Name", "Nom"))
-    table.add_column(tr_multi("Retpoŝto", "Email", "Email"))
-    table.add_column(tr_multi("Organizo", "Organization", "Organisation"))
-    table.add_column(tr_multi("Kategorioj", "Categories", "Catégories"))
-
+    # Pre-process: extract primary email (print_table handles other JSON arrays)
+    rows = []
     for c in contacts:
-        # Handle JSON fields
         emails = c.get("retposhtadresoj", [])
-        if isinstance(emails, str):
-            emails = []
-        primary_email = emails[0].get("valoro", "") if emails else ""
+        primary_email = emails[0].get("valoro", "") if emails and isinstance(emails, list) else ""
+        rows.append({
+            "uuid": c["uuid"][:8],
+            "nomo": c.get("plena_nomo") or c.get("nomo") or "",
+            "retposto": primary_email,
+            "organizo": c.get("organizo", ""),
+            "kategorioj": c.get("kategorioj", []),
+        })
 
-        kategorioj = c.get("kategorioj", [])
-        if isinstance(kategorioj, str):
-            kategorioj = []
-        cats = ", ".join(kategorioj) if kategorioj else ""
+    columns = [
+        {"header": "UUID", "key": "uuid", "style": "dim", "width": 10},
+        {"header": tr_multi("Nomo", "Name", "Nom"), "key": "nomo"},
+        {"header": tr_multi("Retpoŝto", "Email", "Email"), "key": "retposto"},
+        {"header": tr_multi("Organizo", "Organization", "Organisation"), "key": "organizo"},
+        {"header": tr_multi("Kategorioj", "Categories", "Catégories"), "key": "kategorioj"},
+    ]
 
-        name = c.get("plena_nomo") or c.get("nomo") or ""
-        org = c.get("organizo", "")
-
-        table.add_row(
-            c["uuid"][:8],
-            name,
-            primary_email,
-            org or "-",
-            cats or "-",
-        )
-
-    Console().print(table)
+    print_table(columns, rows, title=tr_multi("Kontaktoj", "Contacts", "Contacts"))
 
 
 @kontakto.command("serci")
