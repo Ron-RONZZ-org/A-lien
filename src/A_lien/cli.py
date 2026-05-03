@@ -697,8 +697,9 @@ def kontakto_vidi(
     name = contact.get("plena_nomo") or contact.get("nomo") or "(sen nomo)"
     info(f"  UUID: {contact['uuid']}")
     info(f"  Nomo: {name}")
-    if contact.get("familia_nomo"):
-        info(f"  Familia nomo: {contact['familia_nomo']}")
+    familia_nomo = contact.get("familia_nomo") or ""
+    if familia_nomo and familia_nomo.lower() != "none":
+        info(f"  Familia nomo: {familia_nomo}")
     if contact.get("retposto"):
         info(f"  Retpoŝto: {contact['retposto']}")
     if contact.get("organizo"):
