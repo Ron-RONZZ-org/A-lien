@@ -78,7 +78,7 @@ def retposto_ls() -> None:
 
 @retposto.command("vidi")
 def retposto_vidi(
-    uuid: str = typer.Argument(..., help="Account UUID"),
+    uuid: str = typer.Argument(..., help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
 ) -> None:
     """View account details (password not shown)."""
     service = get_retposto_service()
@@ -109,13 +109,13 @@ def retposto_vidi(
 
 @retposto.command("aldoni-konton")
 def retposto_aldoni_konton(
-    retposto: str = typer.Option(..., "--retposto", "-r", help="Email address"),
-    nomo: str = typer.Option("", "--nomo", "-n", help="Display name"),
-    imap_servilo: str = typer.Option("", "--imap-server", help="IMAP server"),
-    imap_haveno: int = typer.Option(993, "--imap-port", help="IMAP port"),
-    smtp_servilo: str = typer.Option("", "--smtp-server", help="SMTP server"),
-    smtp_haveno: int = typer.Option(587, "--smtp-port", help="SMTP port"),
-    password: str = typer.Option(..., "--password", "-p", prompt=True, hide_input=True, help="Account password"),
+    retposto: str = typer.Option(..., "--retposto", "-r", help=tr_multi("Retpoŝta adreso", "Email address", "Adresse email")),
+    nomo: str = typer.Option("", "--nomo", "-n", help=tr_multi("Vidiga nomo", "Display name", "Nom d'affichage")),
+    imap_servilo: str = typer.Option("", "--imap-server", help=tr_multi("IMAP servilo", "IMAP server", "Serveur IMAP")),
+    imap_haveno: int = typer.Option(993, "--imap-port", help=tr_multi("IMAP haveno", "IMAP port", "Port IMAP")),
+    smtp_servilo: str = typer.Option("", "--smtp-server", help=tr_multi("SMTP servilo", "SMTP server", "Serveur SMTP")),
+    smtp_haveno: int = typer.Option(587, "--smtp-port", help=tr_multi("SMTP haveno", "SMTP port", "Port SMTP")),
+    password: str = typer.Option(..., "--password", "-p", prompt=True, hide_input=True, help=tr_multi("Konto pasvorto", "Account password", "Mot de passe")),
 ) -> None:
     """Add a new email account (password stored in system keyring)."""
     service = get_retposto_service()
@@ -163,7 +163,7 @@ def retposto_aldoni_konton(
 
 @retposto.command("forigi-konton")
 def retposto_forigi_konton(
-    uuid: str = typer.Argument(..., help="Account UUID"),
+    uuid: str = typer.Argument(..., help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
 ) -> None:
     """Delete an email account and its password from keyring."""
     service = get_retposto_service()
@@ -185,8 +185,8 @@ def retposto_forigi_konton(
 
 @retposto.command("preni")
 def retposto_preni(
-    account: str = typer.Option("", "--account", "-a", help="Specific account UUID"),
-    all_accounts: bool = typer.Option(False, "--all", help="Sync all accounts"),
+    account: str = typer.Option("", "--account", "-a", help=tr_multi("Specifa konto UUID", "Specific account UUID", "UUID compte spécifique")),
+    all_accounts: bool = typer.Option(False, "--all", help=tr_multi("Sinkronigi ĉiujn kontojn", "Sync all accounts", "Synchroniser tous les comptes")),
 ) -> None:
     """Fetch mail from accounts."""
     svc = get_retposto_service()
@@ -237,12 +237,12 @@ def _report_sync(result: Any) -> None:
 
 @retposto.command("sendi")
 def retposto_sendi(
-    to: str = typer.Option(..., "--to", "-t", help="Recipient (comma-separated)"),
-    subject: str = typer.Option("", "--subject", "-s", help="Subject"),
-    body: str = typer.Option("", "--body", "-b", help="Body text"),
-    cc: str = typer.Option("", "--cc", help="CC (comma-separated)"),
-    account: str = typer.Option("", "--account", "-a", help="Account UUID"),
-    attach: list[str] = typer.Option([], "--attach", help="File to attach"),
+    to: str = typer.Option(..., "--to", "-t", help=tr_multi("Ricevinto (punktokomo-separita)", "Recipient (comma-separated)", "Destinataire (séparé par;)")),
+    subject: str = typer.Option("", "--subject", "-s", help=tr_multi("Temeto", "Subject", "Sujet")),
+    body: str = typer.Option("", "--body", "-b", help=tr_multi("Teksto de la mesaĝo", "Body text", "Corps du texte")),
+    cc: str = typer.Option("", "--cc", help=tr_multi("KK (punktokomo-separita)", "CC (comma-separated)", "CC (séparé par;)")),
+    account: str = typer.Option("", "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    attach: list[str] = typer.Option([], "--attach", help=tr_multi("Dosiero algluenda", "File to attach", "Fichier à joindre")),
 ) -> None:
     """Send an email."""
     svc = get_retposto_service()
@@ -286,7 +286,7 @@ def retposto_sendi(
 
 @retposto.command("dosierujoj")
 def retposto_dosierujoj(
-    account: str = typer.Option(..., "--account", "-a", help="Account UUID"),
+    account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
 ) -> None:
     """List IMAP folders for an account."""
     svc = get_retposto_service()
@@ -322,9 +322,9 @@ def retposto_dosierujoj(
 
 @retposto.command("mesagxoj")
 def retposto_mesagxoj(
-    account: str = typer.Option(..., "--account", "-a", help="Account UUID"),
-    folder: str = typer.Option("INBOX", "--folder", "-f", help="Folder name"),
-    limit: int = typer.Option(20, "--limit", "-l", help="Max messages"),
+    account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    folder: str = typer.Option("INBOX", "--folder", "-f", help=tr_multi("Dosieruja nomo", "Folder name", "Nom du dossier")),
+    limit: int = typer.Option(20, "--limit", "-l", help=tr_multi("Maksimumaj mesaĝoj", "Max messages", "Messages max")),
 ) -> None:
     """List recent messages in a folder."""
     svc = get_retposto_service()
@@ -381,9 +381,9 @@ def subskribo_ls() -> None:
 
 @subskribo_app.command("aldoni")
 def subskribo_aldoni(
-    nomo: str = typer.Argument(..., help="Signature name"),
-    teksto: str = typer.Option(..., "--teksto", "-t", help="Signature text"),
-    estas_html: bool = typer.Option(False, "--html", help="Text is HTML"),
+    nomo: str = typer.Argument(..., help=tr_multi("Subskribo nomo", "Signature name", "Nom de signature")),
+    teksto: str = typer.Option(..., "--teksto", "-t", help=tr_multi("Subskribo teksto", "Signature text", "Texte de signature")),
+    estas_html: bool = typer.Option(False, "--html", help=tr_multi("Teksto estas HTML", "Text is HTML", "Texte est HTML")),
 ) -> None:
     """Add a new signature."""
     service = get_retposto_service()
@@ -405,7 +405,7 @@ def subskribo_aldoni(
 
 @subskribo_app.command("forigi")
 def subskribo_forigi(
-    uuid: str = typer.Argument(..., help="Signature UUID"),
+    uuid: str = typer.Argument(..., help=tr_multi("Subskribo UUID", "Signature UUID", "UUID signature")),
 ) -> None:
     """Delete a signature."""
     service = get_retposto_service()
@@ -442,7 +442,7 @@ retposto.add_typer(filtraj_app, name="filtraj")
 
 @filtraj_app.command("ls")
 def filtraj_ls(
-    account: str = typer.Option(..., "--account", "-a", help="Account UUID"),
+    account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
 ) -> None:
     """List Sieve scripts on the server."""
     try:
@@ -468,8 +468,8 @@ def filtraj_ls(
 
 @filtraj_app.command("vidi")
 def filtraj_vidi(
-    account: str = typer.Option(..., "--account", "-a", help="Account UUID"),
-    name: str = typer.Argument(..., help="Script name"),
+    account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    name: str = typer.Argument(..., help=tr_multi("Skripta nomo", "Script name", "Nom du script")),
 ) -> None:
     """View a Sieve script from the server."""
     try:
@@ -487,10 +487,10 @@ def filtraj_vidi(
 
 @filtraj_app.command("aldoni")
 def filtraj_aldoni(
-    account: str = typer.Option(..., "--account", "-a", help="Account UUID"),
-    path: str = typer.Argument(..., help="Path to .sieve file"),
-    name: str = typer.Option("", "--name", "-n", help="Script name (default: filename)"),
-    activate: bool = typer.Option(False, "--activate", help="Set as active after upload"),
+    account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    path: str = typer.Argument(..., help=tr_multi("Vojo al .sieve dosiero", "Path to .sieve file", "Chemin vers fichier .sieve")),
+    name: str = typer.Option("", "--name", "-n", help=tr_multi("Skripta nomo (defaŭlte: dosiernomo)", "Script name (default: filename)", "Nom du script (défaut: nom de fichier)")),
+    activate: bool = typer.Option(False, "--activate", help=tr_multi("Agordi kiel aktiva post alŝuto", "Set as active after upload", "Définir comme actif après téléchargement")),
 ) -> None:
     """Upload a Sieve script (validates syntax locally first)."""
     from pathlib import Path as _Path
@@ -543,8 +543,8 @@ def filtraj_aldoni(
 
 @filtraj_app.command("forigi")
 def filtraj_forigi(
-    account: str = typer.Option(..., "--account", "-a", help="Account UUID"),
-    name: str = typer.Argument(..., help="Script name"),
+    account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    name: str = typer.Argument(..., help=tr_multi("Skripta nomo", "Script name", "Nom du script")),
 ) -> None:
     """Delete a Sieve script from the server."""
     try:
@@ -564,8 +564,8 @@ def filtraj_forigi(
 
 @filtraj_app.command("aktivi")
 def filtraj_aktivi(
-    account: str = typer.Option(..., "--account", "-a", help="Account UUID"),
-    name: str = typer.Argument(..., help="Script name"),
+    account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    name: str = typer.Argument(..., help=tr_multi("Skripta nomo", "Script name", "Nom du script")),
 ) -> None:
     """Set a Sieve script as active."""
     try:
@@ -593,11 +593,11 @@ Valid contact fields (JSON):
 
 @kontakto.command("ls")
 def kontakto_ls(
-    limit: int = typer.Option(50, "--limit", "-l", help="Max results"),
+    limit: int = typer.Option(50, "--limit", "-l", help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max")),
     order_by: str = typer.Option(
-        "plena_nomo", "--order", "-o", help="Sort column"
+        "plena_nomo", "--order", "-o", help=tr_multi("Ordiga kolumno", "Sort column", "Colonne de tri")
     ),
-    desc: bool = typer.Option(False, "--desc", "-d", help="Descending order"),
+    desc: bool = typer.Option(False, "--desc", "-d", help=tr_multi("Malkreska ordo", "Descending order", "Ordre décroissant")),
 ) -> None:
     """List all contacts."""
     from rich.console import Console
@@ -646,9 +646,9 @@ def kontakto_ls(
 
 @kontakto.command("serci")
 def kontakto_serci(
-    query: str = typer.Argument(..., help="Search text"),
-    fuzzy: bool = typer.Option(False, "--fuzzy", "-f", help="Enable fuzzy matching"),
-    limit: int = typer.Option(50, "--limit", "-l", help="Max results"),
+    query: str = typer.Argument(..., help=tr_multi("Serĉa teksto", "Search text", "Texte de recherche")),
+    fuzzy: bool = typer.Option(False, "--fuzzy", "-f", help=tr_multi("Ŝalti fuzzy kongruigon", "Enable fuzzy matching", "Activer correspondance floue")),
+    limit: int = typer.Option(50, "--limit", "-l", help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max")),
 ) -> None:
     """Search contacts using full-text search."""
     service = get_kontakto_service()
@@ -676,7 +676,7 @@ def kontakto_serci(
 
 @kontakto.command("vidi")
 def kontakto_vidi(
-    uuid: str = typer.Argument(..., help="Contact UUID (or prefix)"),
+    uuid: str = typer.Argument(..., help=tr_multi("Kontakto UUID (aŭ prefikso)", "Contact UUID (or prefix)", "UUID contact (ou préfixe)")),
 ) -> None:
     """View a contact's full details."""
     service = get_kontakto_service()
@@ -743,14 +743,14 @@ def kontakto_vidi(
 
 @kontakto.command("aldoni")
 def kontakto_aldoni(
-    nomo: str = typer.Option("", "--nomo", "-n", help="Given name"),
-    familia_nomo: str = typer.Option("", "--familia-nomo", "--fn", help="Family name"),
-    plena_nomo: str = typer.Option("", "--plena-nomo", "--pn", help="Full name"),
-    retposto_opt: str = typer.Option("", "--retposto", "-r", help="Primary email"),
-    organizo: str = typer.Option("", "--organizo", "-o", help="Organization"),
-    telefono: str = typer.Option("", "--telefono", "-t", help="Phone number"),
-    noto: str = typer.Option("", "--noto", "-N", help="Notes"),
-    kategorio: str = typer.Option("", "--kategorio", "-k", help="Category"),
+    nomo: str = typer.Option("", "--nomo", "-n", help=tr_multi("Persona nomo", "Given name", "Prénom")),
+    familia_nomo: str = typer.Option("", "--familia-nomo", "--fn", help=tr_multi("Familia nomo", "Family name", "Nom de famille")),
+    plena_nomo: str = typer.Option("", "--plena-nomo", "--pn", help=tr_multi("Plena nomo", "Full name", "Nom complet")),
+    retposto_opt: str = typer.Option("", "--retposto", "-r", help=tr_multi("Ĉefa retpoŝto", "Primary email", "Email principal")),
+    organizo: str = typer.Option("", "--organizo", "-o", help=tr_multi("Organizo", "Organization", "Organisation")),
+    telefono: str = typer.Option("", "--telefono", "-t", help=tr_multi("Telefonnumero", "Phone number", "Téléphone")),
+    noto: str = typer.Option("", "--noto", "-N", help=tr_multi("Notoj", "Notes", "Notes")),
+    kategorio: str = typer.Option("", "--kategorio", "-k", help=tr_multi("Kategorio", "Category", "Catégorie")),
 ) -> None:
     """Add a new contact."""
     from A_lien.utils import split_full_name
@@ -806,15 +806,15 @@ def kontakto_aldoni(
 
 @kontakto.command("modifi")
 def kontakto_modifi(
-    uuid: str = typer.Argument(..., help="Contact UUID"),
-    nomo: str = typer.Option("", "--nomo", "-n", help="Given name"),
-    familia_nomo: str = typer.Option("", "--familia-nomo", "--fn", help="Family name"),
-    plena_nomo: str = typer.Option("", "--plena-nomo", "--pn", help="Full name"),
-    retposto_opt: str = typer.Option("", "--retposto", "-r", help="Primary email"),
-    organizo: str = typer.Option("", "--organizo", "-o", help="Organization"),
-    telefono: str = typer.Option("", "--telefono", "-t", help="Phone number"),
-    noto: str = typer.Option("", "--noto", "-N", help="Notes"),
-    kategorio: str = typer.Option("", "--kategorio", "-k", help="Category"),
+    uuid: str = typer.Argument(..., help=tr_multi("Kontakto UUID", "Contact UUID", "UUID contact")),
+    nomo: str = typer.Option("", "--nomo", "-n", help=tr_multi("Persona nomo", "Given name", "Prénom")),
+    familia_nomo: str = typer.Option("", "--familia-nomo", "--fn", help=tr_multi("Familia nomo", "Family name", "Nom de famille")),
+    plena_nomo: str = typer.Option("", "--plena-nomo", "--pn", help=tr_multi("Plena nomo", "Full name", "Nom complet")),
+    retposto_opt: str = typer.Option("", "--retposto", "-r", help=tr_multi("Ĉefa retpoŝto", "Primary email", "Email principal")),
+    organizo: str = typer.Option("", "--organizo", "-o", help=tr_multi("Organizo", "Organization", "Organisation")),
+    telefono: str = typer.Option("", "--telefono", "-t", help=tr_multi("Telefonnumero", "Phone number", "Téléphone")),
+    noto: str = typer.Option("", "--noto", "-N", help=tr_multi("Notoj", "Notes", "Notes")),
+    kategorio: str = typer.Option("", "--kategorio", "-k", help=tr_multi("Kategorio", "Category", "Catégorie")),
 ) -> None:
     """Modify an existing contact."""
     service = get_kontakto_service()
@@ -872,8 +872,8 @@ def kontakto_modifi(
 
 @kontakto.command("forigi")
 def kontakto_forigi(
-    uuid: str = typer.Argument(..., help="Contact UUID"),
-    permanent: bool = typer.Option(False, "--permanent", "-P", help="Permanent delete"),
+    uuid: str = typer.Argument(..., help=tr_multi("Kontakto UUID", "Contact UUID", "UUID contact")),
+    permanent: bool = typer.Option(False, "--permanent", "-P", help=tr_multi("Definitiva forigo", "Permanent delete", "Suppression permanente")),
 ) -> None:
     """Delete a contact (soft-delete by default)."""
     service = get_kontakto_service()
@@ -896,7 +896,7 @@ def kontakto_forigi(
 
 @kontakto.command("importi")
 def kontakto_importi(
-    path: str = typer.Argument(..., help="Path to .vcf file"),
+    path: str = typer.Argument(..., help=tr_multi("Vojo al .vcf dosiero", "Path to .vcf file", "Chemin vers fichier .vcf")),
 ) -> None:
     """Import contacts from a VCF file."""
     service = get_kontakto_service()
@@ -929,8 +929,8 @@ def kontakto_importi(
 
 @kontakto.command("eksporti")
 def kontakto_eksporti(
-    uuid: str = typer.Option("", "--uuid", "-u", help="Export single contact"),
-    output: str = typer.Option("", "--output", "-o", help="Output file path"),
+    uuid: str = typer.Option("", "--uuid", "-u", help=tr_multi("Eksporti unu kontakton", "Export single contact", "Exporter un contact")),
+    output: str = typer.Option("", "--output", "-o", help=tr_multi("Eliga dosiera vojo", "Output file path", "Chemin de sortie")),
 ) -> None:
     """Export contacts to VCF format."""
     service = get_kontakto_service()
@@ -1052,8 +1052,8 @@ def kategorio_ls() -> None:
 
 @kategorio_app.command("aldoni")
 def kategorio_aldoni(
-    nomo: str = typer.Argument(..., help="Category name"),
-    koloro: str = typer.Option("", "--koloro", "-k", help="Color code"),
+    nomo: str = typer.Argument(..., help=tr_multi("Kategorinomo", "Category name", "Nom de catégorie")),
+    koloro: str = typer.Option("", "--koloro", "-k", help=tr_multi("Kolorkodo", "Color code", "Code couleur")),
 ) -> None:
     """Add a new category."""
     service = get_kontakto_service()
@@ -1075,7 +1075,7 @@ def kategorio_aldoni(
 
 @kategorio_app.command("forigi")
 def kategorio_forigi(
-    uuid: str = typer.Argument(..., help="Category UUID"),
+    uuid: str = typer.Argument(..., help=tr_multi("Kategorio UUID", "Category UUID", "UUID catégorie")),
 ) -> None:
     """Delete a category."""
     service = get_kontakto_service()
