@@ -163,13 +163,22 @@ class IMAPClient:
                 self._conn = imaplib.IMAP4(self.host, self.port)
             self._conn.login(username, password)
         except imaplib.IMAP4.error as e:
+            from A import tr_multi
             raise ConnectionError(
-                f"IMAP authentication failed for {username}@{self.host}:{self.port}"
-                f" — {e}"
+                tr_multi(
+                    f"IMAP-aŭtentigo malsukcesis por {username}@{self.host}:{self.port} — {e}",
+                    f"IMAP authentication failed for {username}@{self.host}:{self.port} — {e}",
+                    f"Échec d'authentification IMAP pour {username}@{self.host}:{self.port} — {e}",
+                )
             ) from e
         except Exception as e:
+            from A import tr_multi
             raise ConnectionError(
-                f"IMAP connection failed to {self.host}:{self.port} — {e}"
+                tr_multi(
+                    f"IMAP-konekto malsukcesis al {self.host}:{self.port} — {e}",
+                    f"IMAP connection failed to {self.host}:{self.port} — {e}",
+                    f"Échec de connexion IMAP vers {self.host}:{self.port} — {e}",
+                )
             ) from e
 
     @property
