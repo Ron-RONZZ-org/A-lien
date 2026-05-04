@@ -28,19 +28,29 @@ Requires **A-core** (automatically installed as dependency).
 ## Usage
 
 ```bash
-A lien retposto ls       # List email accounts
+# Account management (konton subcommand)
+A lien retposta konton ls          # List email accounts
+A lien retposta konton aldoni -r user@domain.com -p password  # Add account
+A lien retposta konton modifi <UUID> --nomo "My Account"   # Modify account
+A lien retposta konton forigi <UUID>  # Delete account
+
+# Email operations
 A lien retposto preni   # Fetch mail
+A lien retposto sendi -t user@domain.com -s "Subject"    # Send email
+
+# Contact management
 A lien kontakto ls     # List contacts
 A lien kontakto serci <query>  # Search contacts
 ```
 
 ## Commands
 
-A-lien provides two subcommands:
+A-lien provides three subcommands:
 
 | Command | Description |
 |---------|-------------|
 | retposto | Email management (IMAP/SMTP) |
+| └─ konton | Account management (ls, vidi, aldoni, forigi, modifi) |
 | kontakto | Contact management |
 
 ## About
