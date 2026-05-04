@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+
+# Serena (track memories, ignore config/cache)
+.serena/cache/
+.serena/project*.yml
