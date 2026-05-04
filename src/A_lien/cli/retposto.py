@@ -16,6 +16,52 @@ from A import error, info, tr_multi, warning
 from A_lien.imap import IMAPClient
 from A_lien.service import get_retposto_service
 
+
+def _resolve_message(svc: Any, prefix: str) -> dict[str, Any]:
+    """Resolve a message by exact UUID or unique prefix.
+
+    Tries exact match first, then prefix lookup.
+    Handles 0 matches (not found) and multiple (ambiguous).
+
+    Args:
+        svc: RetpostoService instance
+        prefix: UUID or UUID prefix
+
+    Returns:
+        Message dict
+
+    Raises:
+        typer.Exit(1) if not found or ambiguous
+    """
+    # Exact match first
+    msg = svc.get_message(prefix)
+    if msg:
+        return msg
+
+    # Prefix fallback
+    matches = svc.find_message_by_uuid_prefix(prefix)
+
+    if len(matches) == 1:
+        return matches[0]
+
+    if len(matches) > 1:
+        error(tr_multi(
+            f"Pluraj mesaĝoj kongruas kun '{prefix}':",
+            f"Multiple messages match '{prefix}':",
+            f"Plusieurs messages correspondent à '{prefix}':",
+        ))
+        for m in matches:
+            subj = (m.get("subjekto", "") or "(sen temo)")[:50]
+            info(f"  {m['uuid'][:8]}  {subj}")
+        raise typer.Exit(1)
+
+    error(tr_multi(
+        f"Mesaĝo ne trovita: {prefix}",
+        f"Message not found: {prefix}",
+        f"Message non trouvé: {prefix}",
+    ))
+    raise typer.Exit(1)
+
 retposto = typer.Typer(
     name="retposto",
     help=tr_multi(
@@ -228,17 +274,9 @@ def retposto_vidi_mesago(
         help=tr_multi("Montri HTML", "Show HTML", "Afficher HTML"),
     ),
 ) -> None:
-    """View a email by UUID (opens in editor by default)."""
+    """View a email by UUID or prefix (opens in editor by default)."""
     svc = get_retposto_service()
-    msg = svc.get_message(uuid)
-
-    if not msg:
-        error(tr_multi(
-            f"Mesaĝo ne trovita: {uuid}",
-            f"Message not found: {uuid}",
-            f"Message non trouvé: {uuid}",
-        ))
-        raise typer.Exit(1)
+    msg = _resolve_message(svc, uuid)
 
     # Build email text
     lines = [
