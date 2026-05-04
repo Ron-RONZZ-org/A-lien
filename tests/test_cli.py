@@ -21,9 +21,8 @@ from A_lien.service.kontakto_service import KontaktoService, get_kontakto_servic
 @pytest.fixture(autouse=True)
 def isolate_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Isolate database to tmp_path to prevent leaking test data."""
-    import A_lien.data.storage as storage_module
-    monkeypatch.setattr(storage_module, "_DATA_DIR", tmp_path)
-    monkeypatch.setattr(storage_module, "_DB_FILE", tmp_path / "lien.db")
+    from A.core import paths
+    monkeypatch.setattr(paths, "data_dir", lambda: tmp_path)
 
 
 @pytest.fixture
@@ -153,7 +152,7 @@ class TestCLIKontakto:
         contacts = seeded_service.list()
         uuid = contacts[0]["uuid"]
         runner.invoke(kontakto, ["forigi", uuid])
-        result = runner.invoke(kontakto, ["malfermi"])
+        result = runner.invoke(kontakto, ["malfari"])
         assert result.exit_code == 0
         assert "Malfarita" in result.stdout or "Undone" in result.stdout
 

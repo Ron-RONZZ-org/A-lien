@@ -175,9 +175,9 @@ class IMAPClient:
             from A import tr_multi
             raise ConnectionError(
                 tr_multi(
-                    f"IMAP-konekto malsukcesis al {self.host}:{self.port} — {e}",
-                    f"IMAP connection failed to {self.host}:{self.port} — {e}",
-                    f"Échec de connexion IMAP vers {self.host}:{self.port} — {e}",
+                    f"IMAP-konekto malsukcesis al {username}@{self.host}:{self.port} — {e}",
+                    f"IMAP connection failed to {username}@{self.host}:{self.port} — {e}",
+                    f"Échec de connexion IMAP vers {username}@{self.host}:{self.port} — {e}",
                 )
             ) from e
 
@@ -505,6 +505,7 @@ def sync_accounts_concurrent(
 
     def _sync_one(acct: dict[str, Any]) -> tuple[str, SyncResult]:
         uid = acct.get("uuid", "?")
+        email = acct.get("retposto", uid[:8])
         pw = acct.get("password", "")
         db_store = acct.get("db_store")
         try:
@@ -520,7 +521,7 @@ def sync_accounts_concurrent(
             return uid, sr
         except Exception as e:
             sr = SyncResult()
-            sr.errors.append(str(e))
+            sr.errors.append(f"[{email}] {e}")
             return uid, sr
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
