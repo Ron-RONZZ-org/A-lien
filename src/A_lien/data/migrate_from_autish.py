@@ -185,11 +185,13 @@ def _migrate_accounts(legacy: sqlite3.Connection, target: _SQLiteDB, results: di
                 ),
             )
             
-            # Migrate keyring password: autish-retposto-{email} → A-lien/{new_uuid}
+            # Migrate keyring password: autish-retposto/{id} → A-lien/{new_uuid}
+            # autish uses: keyring.get_password("autish-retposto", str(account_id))
             password = None
             try:
                 import keyring
-                password = keyring.get_password(f"autish-retposto-{email}", "password")
+                account_id = row["id"]
+                password = keyring.get_password("autish-retposto", str(account_id))
             except Exception:
                 pass
             
@@ -198,7 +200,7 @@ def _migrate_accounts(legacy: sqlite3.Connection, target: _SQLiteDB, results: di
                 # Remove old keyring entry
                 try:
                     import keyring
-                    keyring.delete_password(f"autish-retposto-{email}", "password")
+                    keyring.delete_password("autish-retposto", str(account_id))
                 except Exception:
                     pass
             
