@@ -216,6 +216,22 @@ class IMAPClient:
                 if len(parts) >= 3:
                     flags_str = parts[0].strip("() ")
                     name = parts[-2].strip()
+                    # Skip Migadu quirk: folders with empty/root name
+                    if not name or name == "/":
+                        if "\\Sent" in flags_str:
+                            name = "Sent"
+                        elif "\\Drafts" in flags_str:
+                            name = "Drafts"
+                        elif "\\Trash" in flags_str:
+                            name = "Trash"
+                        elif "\\Junk" in flags_str:
+                            name = "Junk"
+                        elif "\\Archive" in flags_str:
+                            name = "Archive"
+                        elif "\\Inbox" in flags_str:
+                            name = "INBOX"
+                        else:
+                            continue  # Skip unknown root folders
                     result.append({
                         "name": name,
                         "delimiter": "/",
@@ -229,9 +245,21 @@ class IMAPClient:
         self, konto_id: str, folder_name: str, db_store: MessageStore,
     ) -> str:
         """Ensure folder exists in local DB, return its UUID."""
-        # This should be handled by the service layer
-        # For now, generate a stable UUID from konto_id + folder_name
-        return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{konto_id}/{folder_name}"))
+        # Generate stable UUID from konto_id + folder_name
+        dosierujo_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{konto_id}/{folder_name}"))
+        
+# Try to insert if not exists (ignore duplicate errors)
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            db_store.db.execute(
+                "INSERT OR IGNORE INTO dosierujoj (uuid, konto_id, nomo, patro_id, kreita_je, modifita_je) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (dosierujo_id, konto_id, folder_name, None, now, now),
+            )
+        except Exception as e:
+            pass  # Ignore errors
+
+        return dosierujo_id
 
     def sync_folder(
         self,
@@ -440,6 +468,11 @@ def sync_account(
             dosierujo_id = str(uuid.uuid5(
                 uuid.NAMESPACE_DNS, f"{konto_id}/{folder_name}",
             ))
+            # Ensure folder exists in DB before syncing
+            try:
+                client._ensure_folder(konto_id, folder_name, db_store)
+            except Exception:
+                pass  # Ignore errors - folder may already exist
             fr = client.sync_folder(
                 folder_name, konto_id, dosierujo_id, db_store,
             )
