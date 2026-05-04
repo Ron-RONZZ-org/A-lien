@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import Any, Optional, Annotated
 
 import typer
 
@@ -188,23 +188,57 @@ def konton_aldoni(
 
 @konton.command("forigi")
 def konton_forigi(
-    uuid: str = typer.Argument(..., help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    uuids: Annotated[list[str], typer.Argument(
+        ...,
+        help=tr_multi(
+            "Kontoj UUID (pluraj)",
+            "Account UUIDs (multiple)",
+            "UUIDs des comptes (plusieurs)",
+        ),
+    )],
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help=tr_multi(
+            "Forigi sen konfirmo",
+            "Delete without confirmation",
+            "Supprimer sans confirmation",
+        ),
+    ),
 ) -> None:
-    """Delete an email account and its password from keyring."""
+    """Delete one or more email accounts and remove passwords from keyring."""
     service = get_retposto_service()
-    try:
-        service.delete_account(uuid)
-        info(tr_multi(
-            f"Konto forigita: {uuid[:8]}",
-            f"Account deleted: {uuid[:8]}",
-            f"Compte supprimé: {uuid[:8]}",
-        ))
-    except Exception as e:
-        error(tr_multi(
-            f"Eraro dum forigo: {e}",
-            f"Error deleting: {e}",
-            f"Erreur lors de la suppression: {e}",
-        ))
+
+    # Confirmation prompt (unless --force)
+    if not force:
+        typer.confirm(tr_multi(
+            f"Ĉu vi certas ke vi volas forigi {len(uuids)} konton(j)?",
+            f"Are you sure you want to delete {len(uuids)} account(s)?",
+            f"Êtes-vous sûr de vouloir supprimer {len(uuids)} compte(s)?",
+        ), abort=True)
+
+    # Execute bulk delete
+    results = service.delete_accounts(uuids)
+    failures = []
+
+    for r in results:
+        if r["success"]:
+            info(tr_multi(
+                f"Konto forigita: {r['uuid'][:8]}",
+                f"Account deleted: {r['uuid'][:8]}",
+                f"Compte supprimé: {r['uuid'][:8]}",
+            ))
+        else:
+            failures.append(r)
+            error(tr_multi(
+                f"Eraro dum forigo de {r['uuid'][:8]}: {r.get('error', '')}",
+                f"Error deleting {r['uuid'][:8]}: {r.get('error', '')}",
+                f"Erreur lors de la suppression de {r['uuid'][:8]}: {r.get('error', '')}",
+            ))
+
+    # Exit with error if any deletions failed
+    if failures:
         raise typer.Exit(1)
 
 
@@ -317,10 +351,10 @@ def retposto_aldoni_konton(
 
 @retposto.command("forigi-konton", hidden=True)
 def retposto_forigi_konton(
-    uuid: str = typer.Argument(..., help="Account UUID"),
+    uuids: Annotated[list[str], typer.Argument(..., help="Account UUIDs")],
 ) -> None:
     """[DEPRECATED] Use 'A lien retposto konton forigi' instead."""
-    konton_forigi(uuid)
+    konton_forigi(uuids=uuids)
 
 
 @retposto.command("preni")
