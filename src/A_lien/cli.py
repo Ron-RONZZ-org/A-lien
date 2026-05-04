@@ -295,7 +295,7 @@ def retposto_ls() -> None:
     konton_ls()
 
 
-@retposto.command("vidi")
+@retposto.command("vidi", hidden=True)
 def retposto_vidi(uuid: str = typer.Argument(..., help="Account UUID")) -> None:
     """[DEPRECATED] Use 'A lien retposto konton vidi' instead."""
     konton_vidi(uuid)
