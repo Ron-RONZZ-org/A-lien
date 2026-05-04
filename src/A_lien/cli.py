@@ -95,22 +95,34 @@ def konton_vidi(
 ) -> None:
     """View account details (password not shown)."""
     service = get_retposto_service()
+    
+    # Try exact match first, then prefix match
     account = service.get_account(uuid)
-
     if not account:
-        error(tr_multi(
-            f"Konto ne trovita: {uuid}",
-            f"Account not found: {uuid}",
-            f"Compte non trouvé: {uuid}",
-        ))
-        raise typer.Exit(1)
+        matches = service.find_by_uuid_prefix(uuid)
+        if len(matches) == 1:
+            account = matches[0]
+        elif len(matches) > 0:
+            error(tr_multi(
+                f"UUID '{uuid}' kongruas kun pluraj kontoj: " + ", ".join(m["uuid"] for m in matches),
+                f"UUID '{uuid}' matches multiple accounts: " + ", ".join(m["uuid"] for m in matches),
+                f"L'UUID '{uuid}' correspond à plusieurs comptes: " + ", ".join(m["uuid"] for m in matches),
+            ))
+            raise typer.Exit(1)
+        else:
+            error(tr_multi(
+                f"Konto ne trovita: {uuid}",
+                f"Account not found: {uuid}",
+                f"Compte non trouvé: {uuid}",
+            ))
+            raise typer.Exit(1)
 
     info(f"  UUID: {account['uuid']}")
     info(f"  Nomo: {account.get('nomo', '')}")
     info(f"  Retpoŝto: {account.get('retposto', '')}")
     info(f"  IMAP: {account.get('imap_servilo', '')}:{account.get('imap_haveno', '993')}")
     info(f"  SMTP: {account.get('smtp_servilo', '')}:{account.get('smtp_haveno', '587')}")
-    has_pw = service.get_password(uuid) is not None
+    has_pw = service.get_password(account["uuid"]) is not None
     info(tr_multi(
         f"  Pasvorto: {'konservita' if has_pw else 'mankas'}",
         f"  Password: {'stored' if has_pw else 'missing'}",
@@ -210,15 +222,26 @@ def konton_modifi(
     """Modify an existing email account."""
     service = get_retposto_service()
 
-    # Verify account exists
+    # Try exact match first, then prefix match
     existing = service.get_account(uuid)
     if not existing:
-        error(tr_multi(
-            f"Konto ne trovita: {uuid}",
-            f"Account not found: {uuid}",
-            f"Compte non trouvé: {uuid}",
-        ))
-        raise typer.Exit(1)
+        matches = service.find_by_uuid_prefix(uuid)
+        if len(matches) == 1:
+            existing = matches[0]
+        elif len(matches) > 0:
+            error(tr_multi(
+                f"UUID '{uuid}' kongruas kun pluraj kontoj: " + ", ".join(m["uuid"] for m in matches),
+                f"UUID '{uuid}' matches multiple accounts: " + ", ".join(m["uuid"] for m in matches),
+                f"L'UUID '{uuid}' correspond à plusieurs comptes: " + ", ".join(m["uuid"] for m in matches),
+            ))
+            raise typer.Exit(1)
+        else:
+            error(tr_multi(
+                f"Konto ne trovita: {uuid}",
+                f"Account not found: {uuid}",
+                f"Compte non trouvé: {uuid}",
+            ))
+            raise typer.Exit(1)
 
     # Build updates dict (only non-empty values)
     updates: dict = {}
@@ -246,8 +269,11 @@ def konton_modifi(
         ))
         return
 
+    # Use the actual UUID (not the input prefix)
+    actual_uuid = existing["uuid"]
+
     try:
-        account = service.update_account(uuid, updates, pw)
+        account = service.update_account(actual_uuid, updates, pw)
         info(tr_multi(
             f"Konto ĝisdatigita: {uuid[:8]}",
             f"Account updated: {uuid[:8]}",
