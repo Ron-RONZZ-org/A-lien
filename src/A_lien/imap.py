@@ -162,8 +162,15 @@ class IMAPClient:
             else:
                 self._conn = imaplib.IMAP4(self.host, self.port)
             self._conn.login(username, password)
+        except imaplib.IMAP4.error as e:
+            raise ConnectionError(
+                f"IMAP authentication failed for {username}@{self.host}:{self.port}"
+                f" — {e}"
+            ) from e
         except Exception as e:
-            raise ConnectionError(f"IMAP connection failed: {e}") from e
+            raise ConnectionError(
+                f"IMAP connection failed to {self.host}:{self.port} — {e}"
+            ) from e
 
     @property
     def conn(self) -> imaplib.IMAP4:
