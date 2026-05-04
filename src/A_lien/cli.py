@@ -289,7 +289,7 @@ def konton_modifi(
 
 
 # Legacy aliases (deprecated) for backward compatibility
-@retposto.command("ls")
+@retposto.command("ls", hidden=True)
 def retposto_ls() -> None:
     """[DEPRECATED] Use 'A lien retposto konton ls' instead."""
     konton_ls()
@@ -301,7 +301,7 @@ def retposto_vidi(uuid: str = typer.Argument(..., help="Account UUID")) -> None:
     konton_vidi(uuid)
 
 
-@retposto.command("aldoni-konton")
+@retposto.command("aldoni-konton", hidden=True)
 def retposto_aldoni_konton(
     retposto: str = typer.Option(..., "--retposto", "-r", help="Email address"),
     nomo: str = typer.Option("", "--nomo", "-n", help="Display name"),
@@ -315,7 +315,7 @@ def retposto_aldoni_konton(
     konton_aldoni(retposto, nomo, imap_servilo, imap_haveno, smtp_servilo, smtp_haveno, password)
 
 
-@retposto.command("forigi-konton")
+@retposto.command("forigi-konton", hidden=True)
 def retposto_forigi_konton(
     uuid: str = typer.Argument(..., help="Account UUID"),
 ) -> None:
@@ -589,7 +589,7 @@ def retposto_dosierujoj(
         client.disconnect()
 
 
-@retposto.command("mesagxoj")
+@retposto.command("mesagxoj", hidden=True)
 def retposto_mesagxoj(
     account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
     folder: str = typer.Option("INBOX", "--folder", "-f", help=tr_multi("Dosieruja nomo", "Folder name", "Nom du dossier")),
