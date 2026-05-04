@@ -25,11 +25,12 @@ from A_lien.keyring import get_password as _get_keyring_pw
 from A_lien.keyring import set_password as _set_keyring_pw
 from A_lien.keyring import delete_password as _del_keyring_pw
 from A_lien.service.kontakto_service import get_kontakto_service
+from A_lien.service.retposto_signature import RetpostoSignatureMixin
 
 _retposto_service: RetpostoService | None = None
 
 
-class RetpostoService(CRUDService, MessageStore):
+class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin):
     """Email account management with keyring password storage.
 
     Features:
@@ -292,12 +293,8 @@ class RetpostoService(CRUDService, MessageStore):
                 enriched.append(acct)
 
         results = sync_accounts_concurrent(enriched)
-
-        # Auto-create contacts for each account
-        for acct_uuid in results:
-            if results[acct_uuid].new > 0:
-                self._autosave_sync_contacts(acct_uuid)
-
+        # Note: _autosave_sync_contacts is already called by sync_account()
+        # inside sync_accounts_concurrent(). No need to call again here.
         return results
 
     def send_email(
@@ -390,33 +387,7 @@ class RetpostoService(CRUDService, MessageStore):
             "modifita_je": now,
         })
 
-    # ── Signature management (subskriboj via CRUDService) ───────────────────
-
-    @property
-    def _signatures(self) -> CRUDService:
-        return CRUDService(self.db, "subskriboj")
-
-    def list_signatures(self) -> list[dict[str, Any]]:
-        return self._signatures.list(order_by="nomo", desc=False)
-
-    def create_signature(
-        self, nomo: str, teksto: str, estas_html: bool = False
-    ) -> dict[str, Any]:
-        return self._signatures.create({
-            "nomo": nomo,
-            "teksto": teksto,
-            "estas_html": 1 if estas_html else 0,
-        })
-
-    def get_signature(self, uuid: str) -> dict[str, Any] | None:
-        return self._signatures.get(uuid)
-
-    def update_signature(self, uuid: str, data: dict[str, Any]) -> dict[str, Any]:
-        return self._signatures.update(uuid, data)
-
-    def delete_signature(self, uuid: str) -> None:
-        self._signatures.delete(uuid, soft=True)
-
+    # ── Signature management — provided by RetpostoSignatureMixin ──────────
     # ── Message search ─────────────────────────────────────────────────────────
 
     def get_message(self, uuid: str) -> dict[str, Any] | None:
@@ -527,4 +498,3 @@ def get_retposto_service() -> RetpostoService:
     return _retposto_service
 
 
-__all__ = ["RetpostoService", "get_retposto_service"]

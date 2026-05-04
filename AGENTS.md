@@ -28,7 +28,15 @@ This is intentional — they share the same SQLite database (`lien.db`) for cont
 ```
 src/A_lien/
 ├── __init__.py            # exports: app
-├── cli.py                 # Typer app (lien → retposto/kontakto sub-apps)
+├── cli/                   # Typer app split by functional unit
+│   ├── __init__.py        # Main app + wire sub-typers
+│   ├── retposto.py        # retposto commands (preni, sendi, vidi, serci, dosierujoj)
+│   ├── konton.py          # Account management (ls, vidi, aldoni, forigi, modifi)
+│   ├── subskribo.py       # Signature management (ls, aldoni, forigi)
+│   ├── filtraj.py         # Sieve filter management (ls, vidi, aldoni, forigi, aktivi)
+│   ├── kontakto.py        # kontakto core commands (ls, serci, vidi, malfari, purigi)
+│   ├── kontakto_edit.py   # kontakto write commands (aldoni, modifi, forigi, importi, eksporti)
+│   └── kategorio.py       # Category management (ls, aldoni, forigi)
 ├── keyring.py             # Keyring abstraction (wraps `keyring` library)
 ├── imap.py                # IMAP sync logic (ThreadPoolExecutor)
 ├── smtp.py                # SMTP send logic (attachments, signatures)
@@ -44,6 +52,8 @@ src/A_lien/
 ```
 
 **Rationale for directory structure:**
+- CLI is split into a package (`cli/`) — no file exceeds 500 lines for readability.
+- Each CLI file covers one functional area (retposto, konton, kontakto, filters, etc.)
 - Services in separate files (`service/`) — RetpostoService has 20+ methods, KontaktoService has 15+. Combined = 800+ lines.
 - IMAP and SMTP are extracted as modules — complex enough (concurrent fetch, attachment handling) to deserve own files.
 - Keyring is a local abstraction — replaced by `A.core.keyring` when that exists.

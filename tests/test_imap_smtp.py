@@ -23,7 +23,7 @@ class TestIMAPClient:
 
     def test_connect_ssl(self):
         """Connect with SSL uses IMAP4_SSL."""
-        with patch("A_lien.imap.imaplib.IMAP4_SSL") as mock:
+        with patch("A_lien.imap.client.imaplib.IMAP4_SSL") as mock:
             client = IMAPClient("imap.test.com", 993, use_ssl=True)
             mock_instance = MagicMock()
             mock.return_value = mock_instance
@@ -33,7 +33,7 @@ class TestIMAPClient:
 
     def test_connect_plain(self):
         """Connect without SSL uses IMAP4."""
-        with patch("A_lien.imap.imaplib.IMAP4") as mock:
+        with patch("A_lien.imap.client.imaplib.IMAP4") as mock:
             client = IMAPClient("imap.test.com", 143, use_ssl=False)
             mock_instance = MagicMock()
             mock.return_value = mock_instance
@@ -42,7 +42,7 @@ class TestIMAPClient:
 
     def test_connect_failure(self):
         """Connection error raises ConnectionError."""
-        with patch("A_lien.imap.imaplib.IMAP4_SSL") as mock:
+        with patch("A_lien.imap.client.imaplib.IMAP4_SSL") as mock:
             mock.side_effect = Exception("Connection refused")
             client = IMAPClient("imap.test.com", 993)
             with pytest.raises(ConnectionError):
@@ -50,7 +50,7 @@ class TestIMAPClient:
 
     def test_disconnect(self):
         """Disconnect performs logout."""
-        with patch("A_lien.imap.imaplib.IMAP4_SSL") as mock:
+        with patch("A_lien.imap.client.imaplib.IMAP4_SSL") as mock:
             mock_instance = MagicMock()
             mock.return_value = mock_instance
             client = IMAPClient("imap.test.com", 993)
@@ -60,7 +60,7 @@ class TestIMAPClient:
 
     def test_list_folders(self):
         """List folders parses IMAP LIST response."""
-        with patch("A_lien.imap.imaplib.IMAP4_SSL") as mock:
+        with patch("A_lien.imap.client.imaplib.IMAP4_SSL") as mock:
             mock_instance = MagicMock()
             mock.return_value = mock_instance
             mock_instance.list.return_value = (
@@ -79,7 +79,7 @@ class TestIMAPClient:
 
     def test_sync_folder_empty(self):
         """Syncing an empty folder returns zero counts."""
-        with patch("A_lien.imap.imaplib.IMAP4_SSL") as mock:
+        with patch("A_lien.imap.client.imaplib.IMAP4_SSL") as mock:
             mock_instance = MagicMock()
             mock.return_value = mock_instance
             mock_instance.select.return_value = ("OK", [b"0"])
@@ -97,7 +97,7 @@ class TestIMAPClient:
 
     def test_sync_folder_with_messages(self):
         """Syncing a folder with messages parses headers."""
-        with patch("A_lien.imap.imaplib.IMAP4_SSL") as mock:
+        with patch("A_lien.imap.client.imaplib.IMAP4_SSL") as mock:
             mock_instance = MagicMock()
             mock.return_value = mock_instance
             mock_instance.select.return_value = ("OK", [b"1"])
@@ -130,7 +130,7 @@ class TestIMAPClient:
 
     def test_parse_email_headers(self):
         """Parsed email has correct header extraction."""
-        with patch("A_lien.imap.imaplib.IMAP4_SSL") as mock:
+        with patch("A_lien.imap.client.imaplib.IMAP4_SSL") as mock:
             mock_instance = MagicMock()
             mock.return_value = mock_instance
             mock_instance.select.return_value = ("OK", [b"1"])
