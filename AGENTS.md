@@ -51,8 +51,9 @@ src/A_lien/
 │   ├── kontakto_service.py    # KontaktoService (CRUD + FTS5 + serialization)
 │   ├── kontakto_vcf.py        # VCF import/export (KontaktoVCFMixin)
 │   ├── kontakto_category.py   # Category management (KontaktoCategoryMixin)
-│   ├── retposto_service.py    # RetpostoService (accounts, IMAP/SMTP, search)
-│   └── retposto_signature.py  # Signature management (RetpostoSignatureMixin)
+│   ├── retposto_service.py       # RetpostoService (accounts, IMAP/SMTP, search, messages)
+│   ├── retposto_signature.py     # Signature management (RetpostoSignatureMixin)
+│   └── retposto_contact_mixin.py # Contact auto-creation (RetpostoContactMixin)
 └── data/
     ├── __init__.py
     ├── storage.py          # SQLite schema + FTSConfig + get_db()

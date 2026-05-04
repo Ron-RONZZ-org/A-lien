@@ -27,11 +27,12 @@ from A_lien.keyring import delete_password as _del_keyring_pw
 from A_lien.service.kontakto_service import get_kontakto_service
 from A_lien.service.retposto_contact_mixin import RetpostoContactMixin
 from A_lien.service.retposto_signature import RetpostoSignatureMixin
+from A_lien.service.retposto_spamo import RetpostoSpamoMixin
 
 _retposto_service: RetpostoService | None = None
 
 
-class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, RetpostoContactMixin):
+class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, RetpostoContactMixin, RetpostoSpamoMixin):
     """Email account management with keyring password storage.
 
     Features:

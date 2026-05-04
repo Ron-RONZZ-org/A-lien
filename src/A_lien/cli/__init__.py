@@ -10,12 +10,14 @@ from A_lien.cli.filtraj import filtraj_app
 from A_lien.cli.kontakto import kontakto
 from A_lien.cli.konton import konton
 from A_lien.cli.retposto import retposto
+from A_lien.cli.spamo import spamo_app
 from A_lien.cli.subskribo import subskribo_app
 
 # Wire up sub-typers under retposto
 retposto.add_typer(konton, name="konton")
 retposto.add_typer(subskribo_app, name="subskribo")
 retposto.add_typer(filtraj_app, name="filtraj")
+retposto.add_typer(spamo_app, name="spamo")
 
 app = typer.Typer(
     name="lien",
