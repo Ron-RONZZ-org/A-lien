@@ -25,12 +25,13 @@ from A_lien.keyring import get_password as _get_keyring_pw
 from A_lien.keyring import set_password as _set_keyring_pw
 from A_lien.keyring import delete_password as _del_keyring_pw
 from A_lien.service.kontakto_service import get_kontakto_service
+from A_lien.service.retposto_contact_mixin import RetpostoContactMixin
 from A_lien.service.retposto_signature import RetpostoSignatureMixin
 
 _retposto_service: RetpostoService | None = None
 
 
-class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin):
+class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, RetpostoContactMixin):
     """Email account management with keyring password storage.
 
     Features:
@@ -111,60 +112,7 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin):
         )
         return msg_uuid
 
-    # ── Auto-contact helpers ──────────────────────────────────────────────────
-
-    def _upsert_contact_from_email(
-        self, email_addr: str, display_name: str = "",
-    ) -> None:
-        """Create or update a contact from an email address.
-
-        Skips no-reply / temporary addresses.
-        If a contact with this email already exists, updates the name.
-        Otherwise creates a new contact.
-
-        Args:
-            email_addr: Raw From header (e.g. 'Name <addr@dom.ain>')
-            display_name: Optional display name
-        """
-        addr = _parse_email_address(email_addr)
-        if not addr or not should_autosave_contact(email_addr):
-            return
-
-        kontakto = get_kontakto_service()
-        name = display_name or _extract_sender_name(email_addr) or addr.split("@")[0]
-
-        existing = kontakto.find_by_email(addr)
-        if existing:
-            # Update name if we have one and contact doesn't have a full name
-            if name and not existing.get("plena_nomo"):
-                kontakto.update(existing["uuid"], {"plena_nomo": name})
-        else:
-            kontakto.create({
-                "plena_nomo": name,
-                "retposhtadresoj": json.dumps(
-                    [{"valoro": addr}],
-                    ensure_ascii=False,
-                ),
-            })
-
-    def _autosave_sync_contacts(self, konto_id: str) -> None:
-        """Auto-create contacts from senders of newly synced, unseen messages.
-
-        Args:
-            konto_id: Account UUID whose messages to scan
-        """
-        rows = self.db.execute(
-            """SELECT de FROM mesagxoj
-               WHERE konto_id = ? AND legita = 0
-               ORDER BY ricevita_je DESC LIMIT 100""",
-            (konto_id,),
-        )
-        seen = set()
-        for row in rows:
-            sender = (row.get("de") or "").strip()
-            if sender and sender not in seen:
-                seen.add(sender)
-                self._upsert_contact_from_email(sender)
+    # ── Auto-contact helpers — provided by RetpostoContactMixin ─────────────
 
     # ── Keyring password helpers ────────────────────────────────────────────
 
@@ -391,8 +339,28 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin):
     # ── Message search ─────────────────────────────────────────────────────────
 
     def get_message(self, uuid: str) -> dict[str, Any] | None:
-        """Get a message by UUID."""
-        return self.get(uuid)  # Uses inherited CRUDService.get
+        """Get a message by UUID (queries mesagxoj table directly)."""
+        return self.db.execute_one(
+            "SELECT * FROM mesagxoj WHERE uuid = ?", (uuid,)
+        )
+
+    def find_message_by_uuid_prefix(self, prefix: str) -> list[dict[str, Any]]:
+        """Find messages by UUID prefix (e.g. first 8 characters).
+
+        Args:
+            prefix: First N characters of a message UUID
+
+        Returns:
+            List of matching messages (empty if none)
+        """
+        if not prefix:
+            return []
+        return list(
+            self.db.execute(
+                "SELECT * FROM mesagxoj WHERE uuid LIKE ?",
+                (f"{prefix}%",),
+            )
+        )
 
     def search_messages(
         self, filters: dict[str, Any], limit: int = 50
