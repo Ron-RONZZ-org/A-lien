@@ -85,9 +85,13 @@ class TestIMAPClient:
             mock_instance.select.return_value = ("OK", [b"0"])
             mock_instance.search.return_value = ("OK", [b""])
 
+            # Build a fake store with empty known_uids
+            fake_store = MagicMock()
+            fake_store.get_known_uids.return_value = set()
+
             client = IMAPClient("imap.test.com", 993)
             client.connect("u", "p")
-            result = client.sync_folder("INBOX")
+            result = client.sync_folder("INBOX", "konto-1", "dosierujo-1", fake_store)
             assert result.total == 0
             assert result.new == 0
 
@@ -114,9 +118,13 @@ class TestIMAPClient:
                 [(b"1 (FLAGS (\\Seen))", msg_bytes)],
             )
 
+            fake_store = MagicMock()
+            fake_store.get_known_uids.return_value = set()
+            fake_store.store_message.return_value = "stored-uuid"
+
             client = IMAPClient("imap.test.com", 993)
             client.connect("u", "p")
-            result = client.sync_folder("INBOX")
+            result = client.sync_folder("INBOX", "konto-1", "dosierujo-1", fake_store)
             assert result.total == 1
             assert result.new == 1
 
@@ -144,28 +152,13 @@ class TestIMAPClient:
                 [(b"1 (FLAGS (\\Seen))", msg_bytes)],
             )
 
+            fake_store = MagicMock()
+            fake_store.get_known_uids.return_value = set()
+            fake_store.store_message.return_value = "stored-uuid"
+
             client = IMAPClient("imap.test.com", 993)
             client.connect("u", "p")
-
-            # Monkey-patch to capture parsed data
-            parsed: list[dict] = []
-
-            class FakeStore:
-                @staticmethod
-                def execute(sql, params=None):
-                    return []
-
-                @staticmethod
-                def transaction():
-                    return MagicMock().__enter__()
-
-            client._store_message = lambda folder, msg, db: parsed.append(
-                client._store_message.__wrapped__(folder, msg, db)
-                if hasattr(client._store_message, "__wrapped__")
-                else None
-            )
-
-            result = client.sync_folder("INBOX", db_store=True)
+            result = client.sync_folder("INBOX", "konto-1", "dosierujo-1", fake_store)
             # This just tests the sync doesn't crash
             assert result.total == 1
 
