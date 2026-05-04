@@ -37,7 +37,9 @@ src/A_lien/
 │   ├── kontakto.py        # kontakto core commands (ls, serci, vidi, malfari, purigi)
 │   ├── kontakto_edit.py   # kontakto write commands (aldoni, modifi, forigi, importi, eksporti)
 │   ├── kategorio.py       # Category management (ls, aldoni, forigi)
-│   └── retposto_search.py # retposto search command (serci)
+│   ├── retposto_search.py # retposto search command (serci)
+│   └── spamo.py           # Spam block management (ls, aldoni, forigi, sinkronigi)
+├── sieve_spamo.py         # Sieve generation + merge for spam rules
 ├── imap/                   # IMAP sync engine (split from monolithic imap.py)
 │   ├── __init__.py         # Re-exports all public API
 │   ├── helpers.py          # Header decoding, email parsing, auto-contact filters
@@ -53,7 +55,8 @@ src/A_lien/
 │   ├── kontakto_category.py   # Category management (KontaktoCategoryMixin)
 │   ├── retposto_service.py       # RetpostoService (accounts, IMAP/SMTP, search, messages)
 │   ├── retposto_signature.py     # Signature management (RetpostoSignatureMixin)
-│   └── retposto_contact_mixin.py # Contact auto-creation (RetpostoContactMixin)
+│   ├── retposto_contact_mixin.py # Contact auto-creation (RetpostoContactMixin)
+│   └── retposto_spamo.py         # Spam block CRUD + Sieve sync (RetpostoSpamoMixin)
 └── data/
     ├── __init__.py
     ├── storage.py          # SQLite schema + FTSConfig + get_db()
@@ -189,6 +192,11 @@ lien
 │       ├── aldoni                #   Add filter
 │       ├── forigi                #   Delete filter
 │       └── aktivi                #   Enable/disable filter
+│   └── spamo                     # Spam block management
+│       ├── ls                    #   List blocks
+│       ├── aldoni                #   Add block
+│       ├── forigi                #   Remove block
+│       └── sinkronigi            #   Sync to ManageSieve server
 │
 └── kontakto
     ├── ls                        # List contacts
