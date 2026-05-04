@@ -36,15 +36,23 @@ src/A_lien/
 │   ├── filtraj.py         # Sieve filter management (ls, vidi, aldoni, forigi, aktivi)
 │   ├── kontakto.py        # kontakto core commands (ls, serci, vidi, malfari, purigi)
 │   ├── kontakto_edit.py   # kontakto write commands (aldoni, modifi, forigi, importi, eksporti)
-│   └── kategorio.py       # Category management (ls, aldoni, forigi)
+│   ├── kategorio.py       # Category management (ls, aldoni, forigi)
+│   └── retposto_search.py # retposto search command (serci)
+├── imap/                   # IMAP sync engine (split from monolithic imap.py)
+│   ├── __init__.py         # Re-exports all public API
+│   ├── helpers.py          # Header decoding, email parsing, auto-contact filters
+│   ├── client.py           # IMAPClient, MessageStore protocol, SyncResult
+│   └── sync.py             # sync_account, sync_accounts_concurrent
 ├── keyring.py             # Keyring abstraction (wraps `keyring` library)
-├── imap.py                # IMAP sync logic (ThreadPoolExecutor)
 ├── smtp.py                # SMTP send logic (attachments, signatures)
 ├── utils.py               # VCF import/export, contact normalization
 ├── service/
 │   ├── __init__.py        # exports both services
-│   ├── kontakto_service.py # KontaktoService (contacts CRUD + FTS5 + VCF)
-│   └── retposto_service.py # RetpostoService (accounts, IMAP, SMTP, filters)
+│   ├── kontakto_service.py    # KontaktoService (CRUD + FTS5 + serialization)
+│   ├── kontakto_vcf.py        # VCF import/export (KontaktoVCFMixin)
+│   ├── kontakto_category.py   # Category management (KontaktoCategoryMixin)
+│   ├── retposto_service.py    # RetpostoService (accounts, IMAP/SMTP, search)
+│   └── retposto_signature.py  # Signature management (RetpostoSignatureMixin)
 └── data/
     ├── __init__.py
     ├── storage.py          # SQLite schema + FTSConfig + get_db()
@@ -54,8 +62,11 @@ src/A_lien/
 **Rationale for directory structure:**
 - CLI is split into a package (`cli/`) — no file exceeds 500 lines for readability.
 - Each CLI file covers one functional area (retposto, konton, kontakto, filters, etc.)
-- Services in separate files (`service/`) — RetpostoService has 20+ methods, KontaktoService has 15+. Combined = 800+ lines.
-- IMAP and SMTP are extracted as modules — complex enough (concurrent fetch, attachment handling) to deserve own files.
+- Services use Python mixin pattern: `retposto_service.py` + `retposto_signature.py`;
+  `kontakto_service.py` + `kontakto_vcf.py` + `kontakto_category.py`
+- IMAP is split into a package (`imap/`) — client, helpers, sync functions separated.
+- No source file exceeds 500 lines.
+- SMTP remains a single file (144 lines, simple send-only).
 - Keyring is a local abstraction — replaced by `A.core.keyring` when that exists.
 
 ## Database Schema
