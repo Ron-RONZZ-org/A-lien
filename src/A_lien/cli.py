@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 
@@ -37,6 +37,19 @@ retposto = typer.Typer(
 )
 app.add_typer(retposto, name="retposto")
 
+# Account management subcommand
+konton = typer.Typer(
+    name="konton",
+    help=tr_multi(
+        "Administri retpoŝtajn kontojn.",
+        "Manage email accounts.",
+        "Gérer les comptes email.",
+    ),
+    no_args_is_help=False,
+    context_settings={"help_option_names": ["-h", "--help", "--helpo"]},
+)
+retposto.add_typer(konton, name="konton")
+
 kontakto = typer.Typer(
     name="kontakto",
     help=tr_multi(
@@ -51,12 +64,12 @@ app.add_typer(kontakto, name="kontakto")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# retposto subcommands — account management (Phase 3)
-# ══════════════════════════════════════════════════════════════════════════════
+# konton subcommands — account management
+# ══════════════════════════════════════════════════════════════════════════════════════
 
 
-@retposto.command("ls")
-def retposto_ls() -> None:
+@konton.command("ls")
+def konton_ls() -> None:
     """List email accounts."""
     service = get_retposto_service()
     accounts = service.list_accounts()
@@ -76,8 +89,8 @@ def retposto_ls() -> None:
         info(f"  {a['uuid'][:8]}  {name} — {email}  ŝlosilo:{has_pw}")
 
 
-@retposto.command("vidi")
-def retposto_vidi(
+@konton.command("vidi")
+def konton_vidi(
     uuid: str = typer.Argument(..., help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
 ) -> None:
     """View account details (password not shown)."""
@@ -107,8 +120,8 @@ def retposto_vidi(
         info(f"  Subskribo: {account['subskribo']}")
 
 
-@retposto.command("aldoni-konton")
-def retposto_aldoni_konton(
+@konton.command("aldoni")
+def konton_aldoni(
     retposto: str = typer.Option(..., "--retposto", "-r", help=tr_multi("Retpoŝta adreso", "Email address", "Adresse email")),
     nomo: str = typer.Option("", "--nomo", "-n", help=tr_multi("Vidiga nomo", "Display name", "Nom d'affichage")),
     imap_servilo: str = typer.Option("", "--imap-server", help=tr_multi("IMAP servilo", "IMAP server", "Serveur IMAP")),
@@ -161,8 +174,8 @@ def retposto_aldoni_konton(
         raise typer.Exit(1)
 
 
-@retposto.command("forigi-konton")
-def retposto_forigi_konton(
+@konton.command("forigi")
+def konton_forigi(
     uuid: str = typer.Argument(..., help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
 ) -> None:
     """Delete an email account and its password from keyring."""
@@ -181,6 +194,107 @@ def retposto_forigi_konton(
             f"Erreur lors de la suppression: {e}",
         ))
         raise typer.Exit(1)
+
+
+@konton.command("modifi")
+def konton_modifi(
+    uuid: str = typer.Argument(..., help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    retposto: str = typer.Option("", "--retposto", "-r", help=tr_multi("Retpoŝta adreso", "Email address", "Adresse email")),
+    nomo: str = typer.Option("", "--nomo", "-n", help=tr_multi("Vidiga nomo", "Display name", "Nom d'affichage")),
+    imap_servilo: str = typer.Option("", "--imap-server", help=tr_multi("IMAP servilo", "IMAP server", "Serveur IMAP")),
+    imap_haveno: int = typer.Option(0, "--imap-port", help=tr_multi("IMAP haveno", "IMAP port", "Port IMAP")),
+    smtp_servilo: str = typer.Option("", "--smtp-server", help=tr_multi("SMTP servilo", "SMTP server", "Serveur SMTP")),
+    smtp_haveno: int = typer.Option(0, "--smtp-port", help=tr_multi("SMTP haveno", "SMTP port", "Port SMTP")),
+    password: str = typer.Option("", "--password", "-p", help=tr_multi("Nova pasvorto", "New password", "Nouveau mot de passe")),
+) -> None:
+    """Modify an existing email account."""
+    service = get_retposto_service()
+
+    # Verify account exists
+    existing = service.get_account(uuid)
+    if not existing:
+        error(tr_multi(
+            f"Konto ne trovita: {uuid}",
+            f"Account not found: {uuid}",
+            f"Compte non trouvé: {uuid}",
+        ))
+        raise typer.Exit(1)
+
+    # Build updates dict (only non-empty values)
+    updates: dict = {}
+    if retposto:
+        updates["retposto"] = retposto
+    if nomo:
+        updates["nomo"] = nomo
+    if imap_servilo:
+        updates["imap_servilo"] = imap_servilo
+    if imap_haveno:
+        updates["imap_haveno"] = imap_haveno
+    if smtp_servilo:
+        updates["smtp_servilo"] = smtp_servilo
+    if smtp_haveno:
+        updates["smtp_haveno"] = smtp_haveno
+
+    # Password needs special handling (keyring)
+    pw = password if password else None
+
+    if not updates and pw is None:
+        warning(tr_multi(
+            "Neniu ŝanĝo provizita.",
+            "No changes provided.",
+            "Aucun changement fourni.",
+        ))
+        return
+
+    try:
+        account = service.update_account(uuid, updates, pw)
+        info(tr_multi(
+            f"Konto ĝisdatigita: {uuid[:8]}",
+            f"Account updated: {uuid[:8]}",
+            f"Compte mis à jour: {uuid[:8]}",
+        ))
+    except Exception as e:
+        error(tr_multi(
+            f"Eraro dum ĝisdatigo: {e}",
+            f"Error updating: {e}",
+            f"Erreur lors de la mise à jour: {e}",
+        ))
+        raise typer.Exit(1)
+
+
+# Legacy aliases (deprecated) for backward compatibility
+@retposto.command("ls")
+def retposto_ls() -> None:
+    """[DEPRECATED] Use 'A lien retposto konton ls' instead."""
+    konton_ls()
+
+
+@retposto.command("vidi")
+def retposto_vidi(uuid: str = typer.Argument(..., help="Account UUID")) -> None:
+    """[DEPRECATED] Use 'A lien retposto konton vidi' instead."""
+    konton_vidi(uuid)
+
+
+@retposto.command("aldoni-konton")
+def retposto_aldoni_konton(
+    retposto: str = typer.Option(..., "--retposto", "-r", help="Email address"),
+    nomo: str = typer.Option("", "--nomo", "-n", help="Display name"),
+    imap_servilo: str = typer.Option("", "--imap-server", help="IMAP server"),
+    imap_haveno: int = typer.Option(993, "--imap-port", help="IMAP port"),
+    smtp_servilo: str = typer.Option("", "--smtp-server", help="SMTP server"),
+    smtp_haveno: int = typer.Option(587, "--smtp-port", help="SMTP port"),
+    password: str = typer.Option(..., "--password", "-p", prompt=True, hide_input=True, help="Account password"),
+) -> None:
+    """[DEPRECATED] Use 'A lien retposto konton aldoni' instead."""
+    konton_aldoni(retposto, nomo, imap_servilo, imap_haveno, smtp_servilo, smtp_haveno, password)
+
+
+@retposto.command("forigi-konton")
+def retposto_forigi_konton(
+    uuid: str = typer.Argument(..., help="Account UUID"),
+) -> None:
+    """[DEPRECATED] Use 'A lien retposto konton forigi' instead."""
+    konton_forigi(uuid)
 
 
 @retposto.command("preni")
