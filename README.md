@@ -37,6 +37,8 @@ A lien retposta konton forigi <UUID>  # Delete account
 # Email operations
 A lien retposto preni   # Fetch mail
 A lien retposto sendi -t user@domain.com -s "Subject"    # Send email
+A lien retposto vidi <UUID>   # View email
+A lien retposto serci -f sender@domain.com   # Search emails
 
 # Contact management
 A lien kontakto ls     # List contacts
@@ -51,6 +53,8 @@ A-lien provides three subcommands:
 |---------|-------------|
 | retposto | Email management (IMAP/SMTP) |
 | └─ konton | Account management (ls, vidi, aldoni, forigi, modifi) |
+| └─ vidi | View email by UUID |
+| └─ serci | Search emails (filters: from, to, cc, subject, body, date, read, priority) |
 | kontakto | Contact management |
 
 ## About
