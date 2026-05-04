@@ -398,6 +398,135 @@ def retposto_sendi(
         raise typer.Exit(1)
 
 
+@retposto.command("vidi")
+def retposto_vidi_mesago(
+    uuid: str = typer.Argument(..., help=tr_multi("Mesaĝo UUID", "Message UUID", "UUID message")),
+    html: bool = typer.Option(False, "--html", help=tr_multi("Montri HTML", "Show HTML", "Afficher HTML")),
+) -> None:
+    """View a email by UUID (opens in editor by default)."""
+    import os
+    import tempfile
+
+    svc = get_retposto_service()
+    msg = svc.get_message(uuid)
+
+    if not msg:
+        error(tr_multi(
+            f"Mesaĝo ne trovita: {uuid}",
+            f"Message not found: {uuid}",
+            f"Message non trouvé: {uuid}",
+        ))
+        raise typer.Exit(1)
+
+    # Build email text
+    lines = [
+        f"From: {msg.get('de', '')}",
+        f"To: {msg.get('al', '')}",
+        f"Subject: {msg.get('subjekto', '')}",
+        f"Date: {msg.get('ricevita_je', '')}",
+        f"Priority: {msg.get('prioritato', 5)}",
+        f"Read: {'Yes' if msg.get('legita') else 'No'}",
+        "-" * 40,
+        "",
+    ]
+
+    body = msg.get("html_korpo", "") if html else msg.get("korpo", "")
+    if not body:
+        body = msg.get("korpo", "")
+    lines.append(body)
+
+    email_text = "\n".join(lines)
+
+    # Open in editor or print
+    editor = os.environ.get("EDITOR", "less")
+    if editor in ("less", "more") or "-" in editor:
+        info(email_text)
+    else:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(email_text)
+            temp_path = f.name
+        try:
+            os.system(f"{editor} {temp_path}")
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+
+@retposto.command("serci")
+def retposto_serci(
+    query: str = typer.Argument("", help=tr_multi("Serĉa teksto", "Search text", "Texte de recherche")),
+    from_addr: str = typer.Option("", "--from", "-f", help=tr_multi("Sendanto", "From sender", "Expéditeur")),
+    to: str = typer.Option("", "--to", "-t", help=tr_multi("Ricevinto", "Recipient", "Destinataire")),
+    cc: str = typer.Option("", "--cc", help=tr_multi("KK", "CC", "CC")),
+    bcc: str = typer.Option("", "--bcc", help=tr_multi("SKK", "BCC", "BCC")),
+    subject: str = typer.Option("", "--subject", "-s", help=tr_multi("Temeto", "Subject", "Sujet")),
+    body: str = typer.Option("", "--body", "-b", help=tr_multi("Korpo", "Body", "Corps")),
+    after: str = typer.Option("", "--after", help=tr_multi("Post dato (YYYYMMDD)", "After date (YYYYMMDD)", "Après date (YYYYMMDD)")),
+    before: str = typer.Option("", "--before", help=tr_multi("Antaŭ dato (YYYYMMDD)", "Before date (YYYYMMDD)", "Avant date (YYYYMMDD)")),
+    read: bool = typer.Option(False, "--read", help=tr_multi("Legita", "Read", "Lu")),
+    unread: bool = typer.Option(False, "--unread", help=tr_multi("Nelegita", "Unread", "Non lu")),
+    priority: int = typer.Option(0, "--priority", "-p", help=tr_multi("Prioritato (1-5)", "Priority (1-5)", "Priorité (1-5)")),
+    limit: int = typer.Option(50, "--limit", "-l", help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max")),
+    account: str = typer.Option("", "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+) -> None:
+    """Search emails with filters."""
+    import json
+
+    svc = get_retposto_service()
+
+    # Build filters
+    filters: dict = {}
+    if query:
+        filters["query"] = query
+    if from_addr:
+        filters["from"] = from_addr
+    if to:
+        filters["to"] = to
+    if cc:
+        filters["cc"] = cc
+    if bcc:
+        filters["bcc"] = bcc
+    if subject:
+        filters["subject"] = subject
+    if body:
+        filters["body"] = body
+    if after:
+        filters["after"] = after
+    if before:
+        filters["before"] = before
+    if read:
+        filters["read"] = True
+    if unread:
+        filters["read"] = False
+    if priority > 0:
+        filters["priority"] = priority
+    if account:
+        filters["account"] = account
+
+    results = svc.search_messages(filters, limit=limit)
+
+    if not results:
+        info(tr_multi(
+            "Neniuj rezultoj.",
+            "No results.",
+            "Aucun résultat.",
+        ))
+        return
+
+    info(tr_multi(
+        f"Trovitaj {len(results)} mesaĝo(j):",
+        f"Found {len(results)} message(s):",
+        f"{len(results)} message(s) trouvé(s):",
+    ))
+
+    for m in results:
+        read_indicator = tr_multi("legita", "read", "lu") if m.get("legita") else tr_multi("nelegita", "unread", "non lu")
+        preview = (m.get("subjekto", "") or "(sen temo)")[:50]
+        info(f"  {m['uuid'][:8]}  {read_indicator}: {preview}")
+
+
 @retposto.command("dosierujoj")
 def retposto_dosierujoj(
     account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
@@ -440,7 +569,24 @@ def retposto_mesagxoj(
     folder: str = typer.Option("INBOX", "--folder", "-f", help=tr_multi("Dosieruja nomo", "Folder name", "Nom du dossier")),
     limit: int = typer.Option(20, "--limit", "-l", help=tr_multi("Maksimumaj mesaĝoj", "Max messages", "Messages max")),
 ) -> None:
-    """List recent messages in a folder."""
+    """[DEPRECATED] Use 'A lien retposto serci' instead."""
+    warning(tr_multi(
+        "Ĉi tiu komando estas eksvalidigita. Uzu 'serci' anstataŭe.",
+        "This command is deprecated. Use 'serci' instead.",
+        "Cette commande est obsolète. Utilisez 'serci' à la place.",
+    ))
+    # Still work for compatibility
+    svc = get_retposto_service()
+    try:
+        result = svc.sync_account(account)
+        info(tr_multi(
+            f"Trovitaj {result.total} mesaĝoj (prenitaj: {result.new} novaj)",
+            f"Found {result.total} messages (fetched: {result.new} new)",
+            f"Trouvé {result.total} messages (récupérés: {result.new} nouveaux)",
+        ))
+    except Exception as e:
+        error(str(e))
+        raise typer.Exit(1)
     svc = get_retposto_service()
     # Fetch from IMAP
     try:

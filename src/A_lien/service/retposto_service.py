@@ -404,6 +404,107 @@ class RetpostoService(CRUDService, MessageStore):
     def delete_signature(self, uuid: str) -> None:
         self._signatures.delete(uuid, soft=True)
 
+    # ── Message search ─────────────────────────────────────────────────────────
+
+    def get_message(self, uuid: str) -> dict[str, Any] | None:
+        """Get a message by UUID."""
+        return self.get(uuid)  # Uses inherited CRUDService.get
+
+    def search_messages(
+        self, filters: dict[str, Any], limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """Search messages with filters.
+
+        Args:
+            filters: Dict with search criteria:
+                - query: Full-text search in subject/body
+                - from: From address
+                - to: To address
+                - cc: CC address
+                - bcc: BCC address
+                - subject: Subject search
+                - body: Body search
+                - after: Date after (YYYYMMDD)
+                - before: Date before (YYYYMMDD)
+                - read: Boolean read status
+                - priority: Priority level
+                - account: Account UUID
+            limit: Max results
+
+        Returns:
+            List of matching messages
+        """
+        # Build SQL query
+        conditions = []
+        params = []
+
+        if filters.get("query"):
+            conditions.append("(subjekto LIKE ? OR korpo LIKE ?)")
+            q = f"%{filters['query']}%"
+            params.extend([q, q])
+
+        if filters.get("from"):
+            conditions.append("de LIKE ?")
+            params.append(f"%{filters['from']}%")
+
+        if filters.get("to"):
+            conditions.append("al LIKE ?")
+            params.append(f"%{filters['to']}%")
+
+        if filters.get("cc"):
+            conditions.append("kc LIKE ?")
+            params.append(f"%{filters['cc']}%")
+
+        if filters.get("bcc"):
+            conditions.append("bkc LIKE ?")
+            params.append(f"%{filters['bcc']}%")
+
+        if filters.get("subject"):
+            conditions.append("subjekto LIKE ?")
+            params.append(f"%{filters['subject']}%")
+
+        if filters.get("body"):
+            conditions.append("korpo LIKE ?")
+            params.append(f"%{filters['body']}%")
+
+        if filters.get("after"):
+            conditions.append("ricevita_je >= ?")
+            params.append(filters["after"])
+
+        if filters.get("before"):
+            conditions.append("ricevita_je <= ?")
+            params.append(filters["before"])
+
+        if filters.get("read") is not None:
+            conditions.append("legita = ?")
+            params.append(1 if filters["read"] else 0)
+
+        if filters.get("priority"):
+            conditions.append("prioritato = ?")
+            params.append(filters["priority"])
+
+        if filters.get("account"):
+            conditions.append("konto_id = ?")
+            params.append(filters["account"])
+
+        # Build query
+        if conditions:
+            where = " AND ".join(conditions)
+            sql = f"SELECT * FROM mesagxoj WHERE {where} ORDER BY ricevita_je DESC LIMIT ?"
+        else:
+            sql = "SELECT * FROM mesagxoj ORDER BY ricevita_je DESC LIMIT ?"
+
+        params.append(limit)
+
+        try:
+            rows = self.db.execute(sql, tuple(params))
+        except Exception:
+            # Fallback to simple query
+            sql = "SELECT * FROM mesagxoj ORDER BY ricevita_je DESC LIMIT ?"
+            rows = self.db.execute(sql, (limit,))
+
+        return list(rows)
+
 
 def get_retposto_service() -> RetpostoService:
     """Get the singleton RetpostoService."""
