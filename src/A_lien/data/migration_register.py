@@ -26,11 +26,16 @@ def _wrapper() -> MigrationResult:
     details = result.get("details", {})
     contact_count = details.get("contacts", {}).get("migrated_rows", 0)
     account_count = details.get("accounts", {}).get("migrated_rows", 0)
+    keyring_count = details.get("keyring_migrated", 0)
     all_errors = result.get("errors", [])
     
-    detail_str = f"contacts={contact_count}, accounts={account_count}"
+    # Build detail string with keyring if any migrated
+    detail_parts = [f"contacts={contact_count}", f"accounts={account_count}"]
+    if keyring_count > 0:
+        detail_parts.append(f"keyring={keyring_count}")
     if all_errors:
-        detail_str += f", errors={len(all_errors)}"
+        detail_parts.append(f"errors={len(all_errors)}")
+    detail_str = ", ".join(detail_parts)
     
     return MigrationResult(
         module="A-lien",
@@ -39,6 +44,7 @@ def _wrapper() -> MigrationResult:
         source_rows=result.get("source_rows", 0),
         migrated_rows=result.get("migrated_rows", 0),
         errors=all_errors,
+        detail=detail_str,
     )
 
 
