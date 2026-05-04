@@ -43,35 +43,35 @@ def retposto_serci(
         help=tr_multi("Korpo", "Body", "Corps"),
     ),
     after: str = typer.Option(
-        "", "--after",
+        "", "--post",
         help=tr_multi(
             "Post dato (YYYYMMDD)", "After date (YYYYMMDD)", "Après date (YYYYMMDD)"
         ),
     ),
     before: str = typer.Option(
-        "", "--before",
+        "", "--antaux",
         help=tr_multi(
             "Antaŭ dato (YYYYMMDD)", "Before date (YYYYMMDD)", "Avant date (YYYYMMDD)"
         ),
     ),
     read: bool = typer.Option(
-        False, "--read",
+        False, "--legita",
         help=tr_multi("Legita", "Read", "Lu"),
     ),
     unread: bool = typer.Option(
-        False, "--unread",
+        False, "--nelegita",
         help=tr_multi("Nelegita", "Unread", "Non lu"),
     ),
     priority: int = typer.Option(
-        0, "--priority", "-p",
+        0, "--prioritato", "-p",
         help=tr_multi("Prioritato (1-5)", "Priority (1-5)", "Priorité (1-5)"),
     ),
     limit: int = typer.Option(
-        50, "--limit", "-l",
+        50, "--limo", "-l",
         help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max"),
     ),
     account: str = typer.Option(
-        "", "--account", "-a",
+        "", "--konto", "-a",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
 ) -> None:

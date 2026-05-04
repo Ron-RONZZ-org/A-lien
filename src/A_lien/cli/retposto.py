@@ -1,7 +1,6 @@
 """Retposto commands — email operations.
 
 Commands: preni, sendi, vidi, serci, dosierujoj, mesagxoj
-Plus deprecated aliases for backward compatibility.
 """
 
 from __future__ import annotations
@@ -67,7 +66,7 @@ def _report_sync(result: Any, account_label: str = "") -> None:
 @retposto.command("preni")
 def retposto_preni(
     account: str = typer.Option(
-        "", "--account", "-a",
+        "", "--konto", "-a",
         help=tr_multi(
             "Specifa konto UUID aŭ prefikso",
             "Specific account UUID or prefix",
@@ -85,7 +84,7 @@ def retposto_preni(
 ) -> None:
     """Fetch mail from accounts.
 
-    Use --account to sync a single account (by UUID or prefix).
+    Use --konto to sync a single account (by UUID or prefix).
     Use --all to sync all accounts with passwords.
     """
     svc = get_retposto_service()
@@ -119,9 +118,9 @@ def retposto_preni(
 
         if not sync_accts:
             info(tr_multi(
-                "Neniuj kontoj kun pasvorto. Aldonu unue per 'aldoni-konton'.",
-                "No accounts with passwords. Add one via 'aldoni-konton'.",
-                "Aucun compte avec mot de passe. Ajoutez-en un via 'aldoni-konton'.",
+                "Neniuj kontoj kun pasvorto. Aldonu unue per 'konton aldoni'.",
+                "No accounts with passwords. Add one via 'konton aldoni'.",
+                "Aucun compte avec mot de passe. Ajoutez-en un via 'konton aldoni'.",
             ))
             return
 
@@ -167,11 +166,11 @@ def retposto_sendi(
         ),
     ),
     account: str = typer.Option(
-        "", "--account", "-a",
+        "", "--konto", "-a",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
     attach: list[str] = typer.Option(
-        [], "--attach",
+        [], "--alglui",
         help=tr_multi(
             "Dosiero algluenda",
             "File to attach",
@@ -285,7 +284,7 @@ retposto.command(name="serci")(retposto_serci)
 @retposto.command("dosierujoj")
 def retposto_dosierujoj(
     account: str = typer.Option(
-        ..., "--account", "-a",
+        ..., "--konto", "-a",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
 ) -> None:
@@ -323,15 +322,15 @@ def retposto_dosierujoj(
 @retposto.command("mesagxoj", hidden=True)
 def retposto_mesagxoj(
     account: str = typer.Option(
-        ..., "--account", "-a",
+        ..., "--konto", "-a",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
     folder: str = typer.Option(
-        "INBOX", "--folder", "-f",
+        "INBOX", "--dosierujo", "-f",
         help=tr_multi("Dosieruja nomo", "Folder name", "Nom du dossier"),
     ),
     limit: int = typer.Option(
-        20, "--limit", "-l",
+        20, "--limo", "-l",
         help=tr_multi("Maksimumaj mesaĝoj", "Max messages", "Messages max"),
     ),
 ) -> None:
@@ -353,58 +352,6 @@ def retposto_mesagxoj(
         error(str(e))
         raise typer.Exit(1)
 
-
-# ── Deprecated legacy aliases ────────────────────────────────────────────────
-# These redirect to the new konton sub-typer structure
-
-
-@retposto.command("ls", hidden=True)
-def retposto_ls() -> None:
-    """[DEPRECATED] Use 'A lien retposto konton ls' instead."""
-    from A_lien.cli.konton import konton_ls
-
-    konton_ls()
-
-
-@retposto.command("vidi", hidden=True)
-def retposto_vidi(
-    uuid: str = typer.Argument(..., help="Account UUID"),
-) -> None:
-    """[DEPRECATED] Use 'A lien retposto konton vidi' instead."""
-    from A_lien.cli.konton import konton_vidi
-
-    konton_vidi(uuid)
-
-
-@retposto.command("aldoni-konton", hidden=True)
-def retposto_aldoni_konton(
-    retposto: str = typer.Option(
-        ..., "--retposto", "-r", help="Email address"
-    ),
-    nomo: str = typer.Option("", "--nomo", "-n", help="Display name"),
-    imap_servilo: str = typer.Option("", "--imap-server", help="IMAP server"),
-    imap_haveno: int = typer.Option(993, "--imap-port", help="IMAP port"),
-    smtp_servilo: str = typer.Option("", "--smtp-server", help="SMTP server"),
-    smtp_haveno: int = typer.Option(587, "--smtp-port", help="SMTP port"),
-    password: str = typer.Option(
-        ..., "--password", "-p", prompt=True, hide_input=True,
-        help="Account password",
-    ),
-) -> None:
-    """[DEPRECATED] Use 'A lien retposto konton aldoni' instead."""
-    from A_lien.cli.konton import konton_aldoni
-
-    konton_aldoni(retposto, nomo, imap_servilo, imap_haveno, smtp_servilo, smtp_haveno, password)
-
-
-@retposto.command("forigi-konton", hidden=True)
-def retposto_forigi_konton(
-    uuids: list[str] = typer.Argument(..., help="Account UUIDs"),
-) -> None:
-    """[DEPRECATED] Use 'A lien retposto konton forigi' instead."""
-    from A_lien.cli.konton import konton_forigi
-
-    konton_forigi(uuids=uuids)
 
 
 __all__ = [

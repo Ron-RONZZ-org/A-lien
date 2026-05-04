@@ -166,18 +166,28 @@ When an optional dependency is missing (e.g., `keyring`):
 ```
 lien
 ├── retposto
-│   ├── ls                        # List accounts
-│   ├── vidi                      # View account details
-│   ├── aldoni-konton             # Interactive account setup + keyring
-│   ├── forigi-konton             # Delete account + keyring entry
-│   ├── preni                     # Fetch mail (--account to filter)
+│   ├── preni                     # Fetch mail (--konto to filter)
 │   ├── sendi                     # Compose + send
+│   ├── vidi <uuid>               # View single message by UUID
+│   ├── serci                     # Search messages (FTS + filters)
 │   ├── dosierujoj                # List IMAP folders
-│   ├── mesagxoj                  # List messages in folder
-│   ├── montru                    # View single message
-│   ├── subskriboj                # Signature management
-│   ├── filtraj                   # Sieve filter management
-│   └── spamo                     # Spam block management
+│   ├── mesagxoj                  # [DEPRECATED] Use serci instead
+│   ├── konton                    # Account management
+│   │   ├── ls                    #   List accounts
+│   │   ├── vidi                  #   View account details
+│   │   ├── aldoni                #   Add account
+│   │   ├── forigi                #   Delete account(s)
+│   │   └── modifi                #   Modify account
+│   ├── subskribo                 # Signature management
+│   │   ├── ls                    #   List signatures
+│   │   ├── aldoni                #   Add signature
+│   │   └── forigi                #   Delete signature
+│   └── filtraj                   # Sieve filter management
+│       ├── ls                    #   List filters
+│       ├── vidi                  #   View filter
+│       ├── aldoni                #   Add filter
+│       ├── forigi                #   Delete filter
+│       └── aktivi                #   Enable/disable filter
 │
 └── kontakto
     ├── ls                        # List contacts
