@@ -250,7 +250,8 @@ _SCHEMA_STATEMENTS: list[str] = [
     _IDX_MESAGXOJ_KONTO,
     _IDX_MESAGXOJ_DOSIERUJO,
     _IDX_MESAGXOJ_MESSAGE_ID,
-    _IDX_MESAGXOJ_IMAP_UID,
+    # _IDX_MESAGXOJ_IMAP_UID moved to migration v3
+    # (column may not exist yet on legacy DBs from DDL alone)
     _IDX_MESAGXOJ_DATO,
     _IDX_ALDONAJXOJ_MESAGXO,
     _IDX_KONTAKTOJ_NOMO,

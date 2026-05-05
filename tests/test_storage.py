@@ -224,6 +224,84 @@ class TestMigrate:
         assert len(applied1) >= 2
         assert applied2 == []
 
+    def test_legacy_db_upgrade(self, tmp_path):
+        """Legacy DB with uid TEXT column upgrades to imap_uid without crash.
+
+        Simulates the exact bug scenario: a DB from before the IMAP UID
+        migration (uid TEXT exists, imap_uid missing, old index exists).
+        verifies get_db() succeeds and the new index is created.
+        """
+        from A.data.base import SQLiteDB
+
+        # Build a legacy mesagoj table (old schema with uid TEXT)
+        db_path = str(tmp_path / "test_legacy.db")
+        db = SQLiteDB(db_path)
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS mesagoj (
+                uuid           TEXT PRIMARY KEY,
+                konto_id       TEXT NOT NULL,
+                dosierujo_id   TEXT,
+                message_id     TEXT,
+                in_reply_to    TEXT,
+                references_hdr TEXT,
+                uid            TEXT,
+                de             TEXT,
+                al             TEXT NOT NULL DEFAULT '[]',
+                kc             TEXT NOT NULL DEFAULT '[]',
+                bkc            TEXT NOT NULL DEFAULT '[]',
+                subjekto       TEXT,
+                korpo          TEXT,
+                html_korpo     TEXT,
+                prioritato     INTEGER DEFAULT 5,
+                legita         INTEGER NOT NULL DEFAULT 0,
+                stelo          INTEGER NOT NULL DEFAULT 0,
+                spamo          INTEGER NOT NULL DEFAULT 0,
+                forigita       INTEGER NOT NULL DEFAULT 0,
+                aldonajxoj     TEXT NOT NULL DEFAULT '[]',
+                etikedoj       TEXT NOT NULL DEFAULT '[]',
+                ricevita_je    TEXT,
+                kreita_je      TEXT NOT NULL,
+                modifita_je    TEXT NOT NULL
+            )
+        """)
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_mesagoj_konto_uid "
+            "ON mesagoj(konto_id, uid)"
+        )
+        # Insert a sample row to confirm schema is valid
+        db.execute(
+            "INSERT INTO mesagoj (uuid, konto_id, uid, kreita_je, modifita_je) "
+            "VALUES (?, ?, ?, datetime('now'), datetime('now'))",
+            ("test-uuid", "test-konto", "<abc@test.com>"),
+        )
+
+        # Now run get_db() — this should NOT crash (the bug)
+        from A_lien.data.storage import get_db
+
+        db2 = get_db(str(tmp_path / "test_legacy.db"))
+
+        # Verify the new column exists
+        cols = {
+            r["name"]
+            for r in db2.execute("PRAGMA table_info(mesagoj)")
+        }
+        assert "imap_uid" in cols, "imap_uid column should exist after migration"
+        assert "uid" not in cols, "uid column should have been dropped"
+
+        # Verify the new index exists
+        indexes = {
+            r["name"]
+            for r in db2.execute(
+                "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%'"
+            )
+        }
+        assert "idx_mesagoj_imap_uid" in indexes
+        assert "idx_mesagoj_konto_uid" not in indexes
+
+        # Existing data is preserved
+        row = db2.execute_one("SELECT uuid FROM mesagoj WHERE uuid='test-uuid'")
+        assert row is not None
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Keyring tests
