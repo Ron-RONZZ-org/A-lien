@@ -119,19 +119,11 @@ def retposto_preni(
             "UUID ou préfixe de compte spécifique",
         ),
     ),
-    all_accounts: bool = typer.Option(
-        False, "--all",
-        help=tr_multi(
-            "Sinkronigi ĉiujn kontojn",
-            "Sync all accounts",
-            "Synchroniser tous les comptes",
-        ),
-    ),
 ) -> None:
     """Fetch mail from accounts.
 
+    By default syncs all accounts with passwords.
     Use --konto to sync a single account (by UUID or prefix).
-    Use --all to sync all accounts with passwords.
     """
     svc = get_retposto_service()
 
@@ -155,34 +147,33 @@ def retposto_preni(
             error(f"[{email}] {e}")
             raise typer.Exit(1)
 
-    elif all_accounts:
-        # Multi-account — only count accounts WITH passwords
-        all_accts = svc.list_accounts()
-        sync_accts = [
-            a for a in all_accts if svc.get_password(a["uuid"])
-        ]
+        return
 
-        if not sync_accts:
-            info(tr_multi(
-                "Neniuj kontoj kun pasvorto. Aldonu unue per 'konton aldoni'.",
-                "No accounts with passwords. Add one via 'konton aldoni'.",
-                "Aucun compte avec mot de passe. Ajoutez-en un via 'konton aldoni'.",
-            ))
-            return
+    # Default: sync all accounts with passwords
+    all_accts = svc.list_accounts()
+    sync_accts = [
+        a for a in all_accts if svc.get_password(a["uuid"])
+    ]
 
-        email_map = {a["uuid"]: a["retposto"] for a in all_accts}
+    if not sync_accts:
         info(tr_multi(
-            f"Prenas mesaĝojn el {len(sync_accts)} kontoj...",
-            f"Fetching from {len(sync_accts)} accounts...",
-            f"Récupération de {len(sync_accts)} comptes...",
+            "Neniuj kontoj kun pasvorto. Aldonu unue per 'konton aldoni'.",
+            "No accounts with passwords. Add one via 'konton aldoni'.",
+            "Aucun compte avec mot de passe. Ajoutez-en un via 'konton aldoni'.",
         ))
-        results = svc.sync_all()
-        for uid, result in results.items():
-            email = email_map.get(uid, uid[:8])
-            info(f"  {email}: ", nl=False)
-            _report_sync(result, account_label=email)
+        return
 
-    # else: no args → help shown automatically (no_args_is_help=True)
+    email_map = {a["uuid"]: a["retposto"] for a in all_accts}
+    info(tr_multi(
+        f"Prenas mesaĝojn el {len(sync_accts)} kontoj...",
+        f"Fetching from {len(sync_accts)} accounts...",
+        f"Récupération de {len(sync_accts)} comptes...",
+    ))
+    results = svc.sync_all()
+    for uid, result in results.items():
+        email = email_map.get(uid, uid[:8])
+        info(f"  {email}: ", nl=False)
+        _report_sync(result, account_label=email)
 
 
 @retposto.command("sendi")
