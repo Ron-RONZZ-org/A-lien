@@ -88,6 +88,11 @@ _MIGRATIONS: list[tuple[int, str, list[MigrationStep]]] = [
         "Replace uid TEXT with imap_uid INTEGER for proper IMAP UID dedup",
         [_imap_uid_migration],
     ),
+    (
+        4,
+        "Delete stale rows with imap_uid=NULL to prevent first-sync duplicates",
+        ["DELETE FROM mesagoj WHERE imap_uid IS NULL AND dosierujo_id != ''"],
+    ),
 ]
 
 
