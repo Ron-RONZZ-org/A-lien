@@ -125,7 +125,7 @@ class TestGetDB:
         indexes = all_indexes(db)
         assert "idx_dosierujoj_konto" in indexes
         assert "idx_mesagoj_konto" in indexes
-        assert "idx_mesagoj_konto_uid" in indexes
+        assert "idx_mesagoj_imap_uid" in indexes
         assert "idx_mesagoj_dato" in indexes
         assert "idx_aldonajxoj_mesagxo" in indexes
         assert "idx_kontaktoj_nomo" in indexes
@@ -187,23 +187,42 @@ class TestFTSConfig:
 class TestMigrate:
     """Tests for migration system."""
 
-    def test_schema_version_starts_at_0(self, db):
-        """Fresh database starts at version 0."""
+    def _fresh_db_no_migrate(self, tmp_path) -> Any:
+        """Create a SQLiteDB with schema DDL but no migrations applied.
+
+        This simulates an old database that hasn't been migrated.
+        """
+        from A.data.base import SQLiteDB
+        from A_lien.data.storage import _SCHEMA_STATEMENTS
+
+        db_path = str(tmp_path / "test_pre_migrate.db")
+        db = SQLiteDB(db_path)
+        for stmt in _SCHEMA_STATEMENTS:
+            db.execute(stmt)
+        return db
+
+    def test_schema_version_starts_at_0(self, tmp_path):
+        """Fresh database without migrations starts at version 0."""
+        db = self._fresh_db_no_migrate(tmp_path)
         version = get_schema_version(db)
         assert version == 0
 
-    def test_migrate_noop_with_no_pending(self, db):
-        """Migrate on fresh DB applies idempotent migrations only.
-
-        Migration 2 (mesagxoj -> mesagoj rename) is a no-op on fresh
-        installs because the old table never existed, but it still
-        gets recorded to prevent re-running on future upgrades.
-        """
+    def test_migrate_applies_pending(self, tmp_path):
+        """Migrate on an un-migrated DB applies all pending migrations."""
+        db = self._fresh_db_no_migrate(tmp_path)
         applied = migrate(db)
-        assert len(applied) == 1
-        assert "mesagxoj" in applied[0]
+        # Both migration 2 (mesagxoj rename) and 3 (imap_uid) apply
+        assert len(applied) >= 2
         version = get_schema_version(db)
-        assert version == 2
+        assert version >= 3
+
+    def test_migrate_idempotent(self, tmp_path):
+        """Calling migrate twice is a no-op the second time."""
+        db = self._fresh_db_no_migrate(tmp_path)
+        applied1 = migrate(db)
+        applied2 = migrate(db)
+        assert len(applied1) >= 2
+        assert applied2 == []
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -294,19 +294,24 @@ def ensure_dirs() -> None:
 
 
 def get_db(path: str | None = None) -> SQLiteDB:
-    """Get database connection with all tables created.
+    """Get database connection with all tables created and migrations applied.
 
     Args:
         path: Optional override path (default: data_dir() / lien.db)
 
     Returns:
-        SQLiteDB instance with schema applied
+        SQLiteDB instance with schema + migrations applied
     """
     ensure_dirs()
     db = SQLiteDB(path or _path())
 
     for stmt in _SCHEMA_STATEMENTS:
         db.execute(stmt)
+
+    # Apply any pending schema migrations (e.g. imap_uid column)
+    from A_lien.data.migrate import migrate as _migrate
+
+    _migrate(db)
 
     return db
 
