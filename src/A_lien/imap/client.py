@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import imaplib
 import email as email_lib
+import re
 from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
 from typing import Any, Protocol
@@ -35,8 +36,8 @@ class SyncResult:
 class MessageStore(Protocol):
     """Interface for message persistence during IMAP sync."""
 
-    def get_known_uids(self, konto_id: str, dosierujo_id: str) -> set[str]:
-        """Return set of known IMAP UIDs for an account+folder combination."""
+    def get_known_uids(self, konto_id: str, dosierujo_id: str) -> set[int]:
+        """Return set of known IMAP UIDs (integers) for dedup."""
         ...
 
     def store_message(self, data: dict[str, Any]) -> str:
@@ -173,6 +174,9 @@ class IMAPClient:
     ) -> SyncResult:
         """Sync messages in a single folder, storing new ones.
 
+        Uses IMAP UID SEARCH/FETCH (RFC 3501) for stable dedup.
+        Fetches newest UIDs first, paginated in chunks of 100.
+
         Args:
             folder: IMAP folder name (e.g., 'INBOX')
             konto_id: Account UUID
@@ -190,49 +194,72 @@ class IMAPClient:
                 result.errors.append(f"Cannot select folder: {folder}")
                 return result
 
+            # Fetch all IMAP UIDs from server (stable per-folder identifiers)
+            typ, uid_data = self.conn.uid("search", None, "ALL")
+            if typ != "OK":
+                return result
+
+            if not uid_data[0]:
+                self.conn.close()
+                return result
+
+            all_uids = [int(x) for x in uid_data[0].split()]
+            result.total = len(all_uids)
+
+            # Filter out already-synced UIDs
             known_uids = db_store.get_known_uids(konto_id, dosierujo_id)
+            new_uids = [uid for uid in all_uids if uid not in known_uids]
 
-            typ, msg_ids = self.conn.search(None, "ALL")
-            if typ != "OK":
+            if not new_uids:
+                self.conn.close()
                 return result
 
-            ids = msg_ids[0].split() if msg_ids[0] else []
-            result.total = len(ids)
+            # Fetch newest UIDs first (UIDs are monotonically increasing)
+            new_uids.sort(reverse=True)
 
-            if not ids:
-                return result
+            # Paginate in chunks of 100 to avoid command-line overflow
+            chunk_size = 100
+            _IMAP_UID_RE = re.compile(rb"UID (\d+)")
 
-            typ, fetch_data = self.conn.fetch(
-                b",".join(ids), "(FLAGS BODY.PEEK[])",
-            )
-            if typ != "OK":
-                return result
+            for start in range(0, len(new_uids), chunk_size):
+                chunk = new_uids[start : start + chunk_size]
+                uid_list = b",".join(str(u).encode() for u in chunk)
 
-            for i in range(0, len(fetch_data), 2):
-                if not isinstance(fetch_data[i], tuple):
-                    continue
-                try:
-                    raw_data = fetch_data[i][1]
-                    msg = email_lib.message_from_bytes(raw_data)
-
-                    imap_uid = _decode_mime_header(msg.get("Message-ID", ""))
-                    if not imap_uid:
-                        imap_uid = str(uuid.uuid5(
-                            uuid.NAMESPACE_DNS, str(hash(raw_data)),
-                        ))
-
-                    if imap_uid in known_uids:
-                        result.total -= 1
-                        continue
-
-                    self._store_message(
-                        folder, msg, konto_id, dosierujo_id,
-                        imap_uid, db_store,
+                typ, fetch_data = self.conn.uid(
+                    "fetch", uid_list, "(FLAGS BODY.PEEK[])",
+                )
+                if typ != "OK":
+                    result.errors.append(
+                        f"FETCH error at UIDs {chunk[0]}..{chunk[-1]}"
                     )
-                    result.new += 1
+                    continue
 
-                except Exception as e:
-                    result.errors.append(f"Parse/store error: {e}")
+                for i in range(0, len(fetch_data), 2):
+                    if not isinstance(fetch_data[i], tuple):
+                        continue
+                    try:
+                        # Extract IMAP UID from FETCH response
+                        uid_match = _IMAP_UID_RE.search(fetch_data[i][0])
+                        if not uid_match:
+                            continue
+                        imap_uid = int(uid_match.group(1))
+
+                        if imap_uid in known_uids:
+                            continue
+
+                        raw_data = fetch_data[i][1]
+                        msg = email_lib.message_from_bytes(raw_data)
+
+                        self._store_message(
+                            folder, msg, konto_id, dosierujo_id,
+                            imap_uid, db_store,
+                        )
+                        result.new += 1
+
+                    except Exception as e:
+                        result.errors.append(
+                            f"Parse/store error at UID {imap_uid}: {e}"
+                        )
 
             self.conn.close()
         except Exception as e:
@@ -246,7 +273,7 @@ class IMAPClient:
         msg: Any,
         konto_id: str,
         dosierujo_id: str,
-        imap_uid: str,
+        imap_uid: int,
         db_store: MessageStore,
     ) -> str | None:
         """Parse a single email and store it via db_store."""
@@ -297,7 +324,7 @@ class IMAPClient:
             "message_id": message_id,
             "in_reply_to": in_reply_to,
             "references_hdr": references,
-            "uid": imap_uid,
+            "imap_uid": imap_uid,
             "de": from_header,
             "al": json.dumps(_parse_address_list(to_raw), ensure_ascii=False),
             "kc": json.dumps(_parse_address_list(cc_raw), ensure_ascii=False),

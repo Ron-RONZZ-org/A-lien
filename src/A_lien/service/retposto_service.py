@@ -49,7 +49,7 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
 
     # ── MessageStore protocol implementation ──────────────────────────────────
 
-    def get_known_uids(self, konto_id: str, dosierujo_id: str) -> set[str]:
+    def get_known_uids(self, konto_id: str, dosierujo_id: str) -> set[int]:
         """Get set of already-synced IMAP UIDs for an account+folder.
 
         Args:
@@ -57,16 +57,19 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             dosierujo_id: Folder UUID
 
         Returns:
-            Set of UID strings (message_id / IMAP UID)
+            Set of integer IMAP UIDs
         """
         rows = self.db.execute(
-            "SELECT uid FROM mesagoj WHERE konto_id = ? AND dosierujo_id = ?",
+            "SELECT imap_uid FROM mesagoj WHERE konto_id = ? AND dosierujo_id = ? AND imap_uid IS NOT NULL",
             (konto_id, dosierujo_id),
         )
-        return {r["uid"] for r in rows if r.get("uid")}
+        return {r["imap_uid"] for r in rows}
 
     def store_message(self, data: dict[str, Any]) -> str:
-        """Insert a parsed message into mesagoj table.
+        """Insert a message into mesagoj table.
+
+        Dedup is handled upstream by sync_folder() (UID filtering)
+        and the partial unique index on (konto_id, dosierujo_id, imap_uid).
 
         Args:
             data: Parsed message dict
@@ -78,7 +81,7 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
         self.db.execute(
             """INSERT OR IGNORE INTO mesagoj
                (uuid, konto_id, dosierujo_id, message_id, in_reply_to,
-                references_hdr, uid, de, al, kc, bkc,
+                references_hdr, imap_uid, de, al, kc, bkc,
                 subjekto, korpo, html_korpo,
                 prioritato, legita, stelo, spamo, forigita,
                 aldonajxoj, etikedoj, ricevita_je,
@@ -91,7 +94,7 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
                 data.get("message_id", ""),
                 data.get("in_reply_to", ""),
                 data.get("references_hdr", ""),
-                data.get("uid", ""),
+                data.get("imap_uid"),
                 data.get("de", ""),
                 data.get("al", "[]"),
                 data.get("kc", "[]"),
@@ -316,7 +319,6 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             "message_id": f"sent-{uuid_mod.uuid4()}",
             "in_reply_to": "",
             "references_hdr": "",
-            "uid": f"sent-{uuid_mod.uuid4()}",
             "de": sender_email,
             "al": json.dumps(to, ensure_ascii=False),
             "kc": json.dumps(cc, ensure_ascii=False),

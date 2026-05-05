@@ -83,7 +83,7 @@ class TestIMAPClient:
             mock_instance = MagicMock()
             mock.return_value = mock_instance
             mock_instance.select.return_value = ("OK", [b"0"])
-            mock_instance.search.return_value = ("OK", [b""])
+            mock_instance.uid.return_value = ("OK", [b""])
 
             # Build a fake store with empty known_uids
             fake_store = MagicMock()
@@ -101,9 +101,8 @@ class TestIMAPClient:
             mock_instance = MagicMock()
             mock.return_value = mock_instance
             mock_instance.select.return_value = ("OK", [b"1"])
-            mock_instance.search.return_value = ("OK", [b"1"])
 
-            # Build a fake email message
+            # Build a fake email message with a Message-ID
             msg_bytes = (
                 b"From: sender@test.com\r\n"
                 b"To: recipient@test.com\r\n"
@@ -113,10 +112,13 @@ class TestIMAPClient:
                 b"\r\n"
                 b"Hello, this is a test."
             )
-            mock_instance.fetch.return_value = (
-                "OK",
-                [(b"1 (FLAGS (\\Seen))", msg_bytes)],
-            )
+            # uid() is called twice: uid('search', ...) then uid('fetch', ...)
+            mock_instance.uid.side_effect = [
+                ("OK", [b"100"]),              # uid('search', None, "ALL")
+                ("OK", [                         # uid('fetch', ...)
+                    (b"1 (UID 100 FLAGS (\\Seen) BODY[] {42}", msg_bytes),
+                ]),
+            ]
 
             fake_store = MagicMock()
             fake_store.get_known_uids.return_value = set()
@@ -134,7 +136,6 @@ class TestIMAPClient:
             mock_instance = MagicMock()
             mock.return_value = mock_instance
             mock_instance.select.return_value = ("OK", [b"1"])
-            mock_instance.search.return_value = ("OK", [b"1"])
 
             msg_bytes = (
                 b"From: John Doe <john@test.com>\r\n"
@@ -147,10 +148,12 @@ class TestIMAPClient:
                 b"\r\n"
                 b"Body content here."
             )
-            mock_instance.fetch.return_value = (
-                "OK",
-                [(b"1 (FLAGS (\\Seen))", msg_bytes)],
-            )
+            mock_instance.uid.side_effect = [
+                ("OK", [b"200"]),              # uid('search', ...)
+                ("OK", [                         # uid('fetch', ...)
+                    (b"1 (UID 200 FLAGS (\\Seen) BODY[] {48}", msg_bytes),
+                ]),
+            ]
 
             fake_store = MagicMock()
             fake_store.get_known_uids.return_value = set()

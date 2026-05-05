@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS mesagoj (
     message_id     TEXT,
     in_reply_to    TEXT,
     references_hdr TEXT,
-    uid            TEXT,
+    imap_uid       INTEGER,
     de             TEXT,
     al             TEXT NOT NULL DEFAULT '[]',
     kc             TEXT NOT NULL DEFAULT '[]',
@@ -106,8 +106,10 @@ CREATE INDEX IF NOT EXISTS idx_mesagoj_konto ON mesagoj(konto_id);
 _IDX_MESAGXOJ_DOSIERUJO = """
 CREATE INDEX IF NOT EXISTS idx_mesagoj_dosierujo ON mesagoj(dosierujo_id);
 """
-_IDX_MESAGXOJ_KONTO_UID = """
-CREATE INDEX IF NOT EXISTS idx_mesagoj_konto_uid ON mesagoj(konto_id, uid);
+_IDX_MESAGXOJ_IMAP_UID = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mesagoj_imap_uid
+    ON mesagoj(konto_id, dosierujo_id, imap_uid)
+    WHERE imap_uid IS NOT NULL;
 """
 _IDX_MESAGXOJ_MESSAGE_ID = """
 CREATE INDEX IF NOT EXISTS idx_mesagoj_message_id ON mesagoj(konto_id, message_id);
@@ -247,8 +249,8 @@ _SCHEMA_STATEMENTS: list[str] = [
     _IDX_DOSIERUJOJ_KONTO,
     _IDX_MESAGXOJ_KONTO,
     _IDX_MESAGXOJ_DOSIERUJO,
-    _IDX_MESAGXOJ_KONTO_UID,
     _IDX_MESAGXOJ_MESSAGE_ID,
+    _IDX_MESAGXOJ_IMAP_UID,
     _IDX_MESAGXOJ_DATO,
     _IDX_ALDONAJXOJ_MESAGXO,
     _IDX_KONTAKTOJ_NOMO,

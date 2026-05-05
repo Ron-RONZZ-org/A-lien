@@ -33,6 +33,24 @@ def _rename_mesagxoj_to_mesagoj(conn: Any) -> None:
         conn.execute("ALTER TABLE mesagxoj RENAME TO mesagoj")
 
 
+def _imap_uid_migration(conn: Any) -> None:
+    """Migrate mesagoj: drop uid TEXT, add imap_uid INTEGER.
+
+    1. Drop old index referencing uid
+    2. Drop uid column (SQLite 3.35+)
+    3. Add imap_uid column
+    4. Add new partial unique index
+    """
+    conn.execute("DROP INDEX IF EXISTS idx_mesagoj_konto_uid")
+    conn.execute("ALTER TABLE mesagoj DROP COLUMN uid")
+    conn.execute("ALTER TABLE mesagoj ADD COLUMN imap_uid INTEGER")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_mesagoj_imap_uid "
+        "ON mesagoj(konto_id, dosierujo_id, imap_uid) "
+        "WHERE imap_uid IS NOT NULL"
+    )
+
+
 # Migration registry: list of (version, description, steps)
 _MIGRATIONS: list[tuple[int, str, list[MigrationStep]]] = [
     # Version 1 is reserved for initial schema creation (done in storage.py)
@@ -43,6 +61,11 @@ _MIGRATIONS: list[tuple[int, str, list[MigrationStep]]] = [
             # Only rename if the old table exists (fresh installs use mesagoj)
             _rename_mesagxoj_to_mesagoj,
         ],
+    ),
+    (
+        3,
+        "Replace uid TEXT with imap_uid INTEGER for proper IMAP UID dedup",
+        [_imap_uid_migration],
     ),
 ]
 
