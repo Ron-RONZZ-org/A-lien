@@ -7,12 +7,17 @@ using stdlib smtplib and email.mime.
 from __future__ import annotations
 
 import smtplib
+import socket
+import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 from pathlib import Path
 from typing import Any
+
+from A import tr_multi
+from A.core.network import format_connection_error
 
 
 class SMTPClient:
@@ -43,8 +48,27 @@ class SMTPClient:
                 self._conn.ehlo()
 
             self._conn.login(username, password)
+        except smtplib.SMTPAuthenticationError as e:
+            raise ConnectionError(
+                tr_multi(
+                    f"SMTP-aŭtentigo malsukcesis por {username}@{self.host}:{self.port} — {e}",
+                    f"SMTP authentication failed for {username}@{self.host}:{self.port} — {e}",
+                    f"Échec d'authentification SMTP pour {username}@{self.host}:{self.port} — {e}",
+                )
+            ) from e
+        except (socket.gaierror, ConnectionRefusedError,
+                TimeoutError, socket.timeout, ssl.SSLError, OSError) as e:
+            raise ConnectionError(
+                format_connection_error(e, self.host, self.port, "SMTP")
+            ) from e
         except Exception as e:
-            raise ConnectionError(f"SMTP connection failed: {e}") from e
+            raise ConnectionError(
+                tr_multi(
+                    f"SMTP-konekto malsukcesis al {username}@{self.host}:{self.port} — {e}",
+                    f"SMTP connection failed to {username}@{self.host}:{self.port} — {e}",
+                    f"Échec de connexion SMTP vers {username}@{self.host}:{self.port} — {e}",
+                )
+            ) from e
 
     @property
     def conn(self) -> smtplib.SMTP:
@@ -121,7 +145,13 @@ class SMTPClient:
         try:
             self.conn.sendmail(from_addr, all_recipients, msg.as_string())
         except Exception as e:
-            raise ConnectionError(f"SMTP send failed: {e}") from e
+            raise ConnectionError(
+                tr_multi(
+                    f"SMTP-sendo malsukcesis: {e}",
+                    f"SMTP send failed: {e}",
+                    f"Échec d'envoi SMTP: {e}",
+                )
+            ) from e
 
     @staticmethod
     def _attach_file(msg: MIMEMultipart, path: str | Path) -> None:

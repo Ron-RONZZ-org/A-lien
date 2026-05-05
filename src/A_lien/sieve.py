@@ -7,8 +7,12 @@ Provides:
 
 from __future__ import annotations
 
+import socket
+import ssl
 from typing import Any
 
+from A import tr_multi
+from A.core.network import format_connection_error
 from A_lien.service import get_retposto_service
 
 
@@ -66,8 +70,19 @@ class SieveManager:
             from managesieve import MANAGESIEVE as SieveClient
             self._client = SieveClient(self.host, self.port, use_tls=self.use_tls)
             self._client.login(username, password)
+        except (socket.gaierror, ConnectionRefusedError,
+                TimeoutError, socket.timeout, ssl.SSLError, OSError) as e:
+            raise ConnectionError(
+                format_connection_error(e, self.host, self.port, "Sieve")
+            ) from e
         except Exception as e:
-            raise ConnectionError(f"Sieve connection failed: {e}") from e
+            raise ConnectionError(
+                tr_multi(
+                    f"Sieve-konekto malsukcesis al {username}@{self.host}:{self.port} — {e}",
+                    f"Sieve connection failed to {username}@{self.host}:{self.port} — {e}",
+                    f"Échec de connexion Sieve vers {username}@{self.host}:{self.port} — {e}",
+                )
+            ) from e
 
     @property
     def client(self) -> Any:

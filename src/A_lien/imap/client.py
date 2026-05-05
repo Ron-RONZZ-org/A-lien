@@ -5,12 +5,16 @@ from __future__ import annotations
 import imaplib
 import email as email_lib
 import re
+import socket
+import ssl
 from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
 from typing import Any, Protocol
 import uuid
 import json
 
+from A import tr_multi
+from A.core.network import format_connection_error
 from A_lien.imap.helpers import (
     _decode_mime_header,
     _parse_address_list,
@@ -71,7 +75,6 @@ class IMAPClient:
                 self._conn = imaplib.IMAP4(self.host, self.port)
             self._conn.login(username, password)
         except imaplib.IMAP4.error as e:
-            from A import tr_multi
             raise ConnectionError(
                 tr_multi(
                     f"IMAP-aŭtentigo malsukcesis por {username}@{self.host}:{self.port} — {e}",
@@ -79,8 +82,12 @@ class IMAPClient:
                     f"Échec d'authentification IMAP pour {username}@{self.host}:{self.port} — {e}",
                 )
             ) from e
+        except (socket.gaierror, ConnectionRefusedError,
+                TimeoutError, socket.timeout, ssl.SSLError, OSError) as e:
+            raise ConnectionError(
+                format_connection_error(e, self.host, self.port, "IMAP")
+            ) from e
         except Exception as e:
-            from A import tr_multi
             raise ConnectionError(
                 tr_multi(
                     f"IMAP-konekto malsukcesis al {username}@{self.host}:{self.port} — {e}",
