@@ -143,6 +143,9 @@ def retposto_preni(
         try:
             result = svc.sync_account(acct["uuid"])
             _report_sync(result, account_label=email)
+        except ConnectionError as e:
+            error(str(e))
+            raise typer.Exit(1)
         except Exception as e:
             error(f"[{email}] {e}")
             raise typer.Exit(1)
@@ -246,6 +249,9 @@ def retposto_sendi(
             f"Message sent to {to}",
             f"Message envoyé à {to}",
         ))
+    except ConnectionError as e:
+        error(str(e))
+        raise typer.Exit(1)
     except Exception as e:
         error(tr_multi(
             f"Sendado malsukcesis: {e}",
@@ -341,6 +347,9 @@ def retposto_dosierujoj(
         folders = client.list_folders()
         for f in folders:
             info(f"  {f['name']}")
+    except ConnectionError as e:
+        error(str(e))
+        raise typer.Exit(1)
     except Exception as e:
         error(str(e))
         raise typer.Exit(1)
@@ -377,6 +386,9 @@ def retposto_mesagoj(
             f"Found {result.total} messages (fetched: {result.new} new)",
             f"Trouvé {result.total} messages (récupérés: {result.new} nouveaux)",
         ))
+    except ConnectionError as e:
+        error(str(e))
+        raise typer.Exit(1)
     except Exception as e:
         error(str(e))
         raise typer.Exit(1)
