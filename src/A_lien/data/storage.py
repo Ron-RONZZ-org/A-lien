@@ -7,7 +7,7 @@ Design decisions:
 - FTS5 on kontaktoj only (messages use IMAP SEARCH)
 - JSON arrays for multi-value fields (phones, emails, CC/BCC per A-encik pattern)
 - Attachments: BLOB for small files, disk path for large files
-- dosierujoj, mesagxoj, aldonajxoj are NOT managed by CRUDService (too many records)
+- dosierujoj, mesagoj, aldonajxoj are NOT managed by CRUDService (too many records)
   — all others ARE managed by CRUDService for soft-delete + undo support
 """
 
@@ -73,7 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_dosierujoj_konto ON dosierujoj(konto_id);
 # ── Messages ─────────────────────────────────────────────────────────────────
 
 _CREATE_MESAGXOJ = """
-CREATE TABLE IF NOT EXISTS mesagxoj (
+CREATE TABLE IF NOT EXISTS mesagoj (
     uuid           TEXT PRIMARY KEY,
     konto_id       TEXT NOT NULL REFERENCES kontoj(uuid) ON DELETE CASCADE,
     dosierujo_id   TEXT REFERENCES dosierujoj(uuid) ON DELETE SET NULL,
@@ -101,19 +101,19 @@ CREATE TABLE IF NOT EXISTS mesagxoj (
 );
 """
 _IDX_MESAGXOJ_KONTO = """
-CREATE INDEX IF NOT EXISTS idx_mesagxoj_konto ON mesagxoj(konto_id);
+CREATE INDEX IF NOT EXISTS idx_mesagoj_konto ON mesagoj(konto_id);
 """
 _IDX_MESAGXOJ_DOSIERUJO = """
-CREATE INDEX IF NOT EXISTS idx_mesagxoj_dosierujo ON mesagxoj(dosierujo_id);
+CREATE INDEX IF NOT EXISTS idx_mesagoj_dosierujo ON mesagoj(dosierujo_id);
 """
 _IDX_MESAGXOJ_KONTO_UID = """
-CREATE INDEX IF NOT EXISTS idx_mesagxoj_konto_uid ON mesagxoj(konto_id, uid);
+CREATE INDEX IF NOT EXISTS idx_mesagoj_konto_uid ON mesagoj(konto_id, uid);
 """
 _IDX_MESAGXOJ_MESSAGE_ID = """
-CREATE INDEX IF NOT EXISTS idx_mesagxoj_message_id ON mesagxoj(konto_id, message_id);
+CREATE INDEX IF NOT EXISTS idx_mesagoj_message_id ON mesagoj(konto_id, message_id);
 """
 _IDX_MESAGXOJ_DATO = """
-CREATE INDEX IF NOT EXISTS idx_mesagxoj_dato ON mesagxoj(ricevita_je);
+CREATE INDEX IF NOT EXISTS idx_mesagoj_dato ON mesagoj(ricevita_je);
 """
 
 # ── Attachments ──────────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ CREATE INDEX IF NOT EXISTS idx_mesagxoj_dato ON mesagxoj(ricevita_je);
 _CREATE_ALDONAJXOJ = """
 CREATE TABLE IF NOT EXISTS aldonajxoj (
     uuid         TEXT PRIMARY KEY,
-    mesagxo_id   TEXT NOT NULL REFERENCES mesagxoj(uuid) ON DELETE CASCADE,
+    mesagxo_id   TEXT NOT NULL REFERENCES mesagoj(uuid) ON DELETE CASCADE,
     dosiernomo   TEXT NOT NULL,
     mime_tipo    TEXT NOT NULL DEFAULT 'application/octet-stream',
     grandeco     INTEGER NOT NULL DEFAULT 0,

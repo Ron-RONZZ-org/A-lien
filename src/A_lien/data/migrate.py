@@ -14,15 +14,46 @@ Usage::
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
+from typing import Any
 
 from A.data.base import SQLiteDB
 
-# Migration registry: list of (version, description, sql_statements)
-# Each migration must be idempotent (use IF NOT EXISTS / IF EXISTS).
-_MIGRATIONS: list[tuple[int, str, list[str]]] = [
+# A migration step is either a raw SQL string or a callable(conn) -> None.
+MigrationStep = str | Callable[[Any], None]
+
+
+def _rename_mesagxoj_to_mesagoj(conn: Any) -> None:
+    """Rename mesagxoj -> mesagoj if the old table exists."""
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='mesagxoj'"
+    ).fetchone()
+    if row:
+        conn.execute("ALTER TABLE mesagxoj RENAME TO mesagoj")
+
+
+# Migration registry: list of (version, description, steps)
+_MIGRATIONS: list[tuple[int, str, list[MigrationStep]]] = [
     # Version 1 is reserved for initial schema creation (done in storage.py)
+    (
+        2,
+        "Rename mesagxoj table to mesagoj (ASCII base-letter normalization)",
+        [
+            # Only rename if the old table exists (fresh installs use mesagoj)
+            _rename_mesagxoj_to_mesagoj,
+        ],
+    ),
 ]
+
+
+def _rename_mesagxoj_to_mesagoj(conn: Any) -> None:
+    """Rename mesagxoj -> mesagoj if the old table exists."""
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='mesagxoj'"
+    ).fetchone()
+    if row:
+        conn.execute("ALTER TABLE mesagxoj RENAME TO mesagoj")
 
 
 def get_schema_version(db: SQLiteDB) -> int:
@@ -46,6 +77,9 @@ def get_schema_version(db: SQLiteDB) -> int:
 def migrate(db: SQLiteDB, target: int | None = None) -> list[str]:
     """Apply pending migrations up to the target version.
 
+    Each migration step is either a raw SQL string or a callable(conn).
+    Steps are executed inside a single transaction per version.
+
     Args:
         db: Database connection
         target: Target version (None = latest)
@@ -56,15 +90,18 @@ def migrate(db: SQLiteDB, target: int | None = None) -> list[str]:
     current = get_schema_version(db)
     applied: list[str] = []
 
-    for version, description, statements in _MIGRATIONS:
+    for version, description, steps in _MIGRATIONS:
         if version <= current:
             continue
         if target is not None and version > target:
             break
 
         with db.transaction() as conn:
-            for stmt in statements:
-                conn.execute(stmt)
+            for step in steps:
+                if isinstance(step, str):
+                    conn.execute(step)
+                else:
+                    step(conn)
             conn.execute(
                 "INSERT INTO _schema_version (version, applied_je) VALUES (?, ?)",
                 (version, datetime.now(timezone.utc).isoformat()),

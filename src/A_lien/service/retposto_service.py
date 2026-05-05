@@ -60,13 +60,13 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             Set of UID strings (message_id / IMAP UID)
         """
         rows = self.db.execute(
-            "SELECT uid FROM mesagxoj WHERE konto_id = ? AND dosierujo_id = ?",
+            "SELECT uid FROM mesagoj WHERE konto_id = ? AND dosierujo_id = ?",
             (konto_id, dosierujo_id),
         )
         return {r["uid"] for r in rows if r.get("uid")}
 
     def store_message(self, data: dict[str, Any]) -> str:
-        """Insert a parsed message into mesagxoj table.
+        """Insert a parsed message into mesagoj table.
 
         Args:
             data: Parsed message dict
@@ -76,7 +76,7 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
         """
         msg_uuid = data.get("uuid") or str(uuid_mod.uuid4())
         self.db.execute(
-            """INSERT OR IGNORE INTO mesagxoj
+            """INSERT OR IGNORE INTO mesagoj
                (uuid, konto_id, dosierujo_id, message_id, in_reply_to,
                 references_hdr, uid, de, al, kc, bkc,
                 subjekto, korpo, html_korpo,
@@ -340,9 +340,9 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
     # ── Message search ─────────────────────────────────────────────────────────
 
     def get_message(self, uuid: str) -> dict[str, Any] | None:
-        """Get a message by UUID (queries mesagxoj table directly)."""
+        """Get a message by UUID (queries mesagoj table directly)."""
         return self.db.execute_one(
-            "SELECT * FROM mesagxoj WHERE uuid = ?", (uuid,)
+            "SELECT * FROM mesagoj WHERE uuid = ?", (uuid,)
         )
 
     def find_message_by_uuid_prefix(self, prefix: str) -> list[dict[str, Any]]:
@@ -358,7 +358,7 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             return []
         return list(
             self.db.execute(
-                "SELECT * FROM mesagxoj WHERE uuid LIKE ?",
+                "SELECT * FROM mesagoj WHERE uuid LIKE ?",
                 (f"{prefix}%",),
             )
         )
@@ -443,9 +443,9 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
         # Build query
         if conditions:
             where = " AND ".join(conditions)
-            sql = f"SELECT * FROM mesagxoj WHERE {where} ORDER BY ricevita_je DESC LIMIT ?"
+            sql = f"SELECT * FROM mesagoj WHERE {where} ORDER BY ricevita_je DESC LIMIT ?"
         else:
-            sql = "SELECT * FROM mesagxoj ORDER BY ricevita_je DESC LIMIT ?"
+            sql = "SELECT * FROM mesagoj ORDER BY ricevita_je DESC LIMIT ?"
 
         params.append(limit)
 
@@ -453,7 +453,7 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             rows = self.db.execute(sql, tuple(params))
         except Exception:
             # Fallback to simple query
-            sql = "SELECT * FROM mesagxoj ORDER BY ricevita_je DESC LIMIT ?"
+            sql = "SELECT * FROM mesagoj ORDER BY ricevita_je DESC LIMIT ?"
             rows = self.db.execute(sql, (limit,))
 
         return list(rows)

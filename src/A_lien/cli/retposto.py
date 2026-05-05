@@ -1,6 +1,6 @@
 """Retposto commands — email operations.
 
-Commands: preni, sendi, vidi, serci, dosierujoj, mesagxoj
+Commands: preni, sendi, vidi, serci, dosierujoj, mesagoj
 """
 
 from __future__ import annotations
@@ -357,8 +357,8 @@ def retposto_dosierujoj(
         client.disconnect()
 
 
-@retposto.command("mesagxoj", hidden=True)
-def retposto_mesagxoj(
+@retposto.command("mesagoj", hidden=True)
+def retposto_mesagoj(
     account: str = typer.Option(
         ..., "--konto", "-a",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
@@ -400,5 +400,5 @@ __all__ = [
     "retposto_vidi_mesago",
     "retposto_serci",
     "retposto_dosierujoj",
-    "retposto_mesagxoj",
+    "retposto_mesagoj",
 ]

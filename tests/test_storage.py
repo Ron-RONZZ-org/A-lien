@@ -69,7 +69,7 @@ class TestGetDB:
         expected = {
             "kontoj",
             "dosierujoj",
-            "mesagxoj",
+            "mesagoj",
             "aldonajxoj",
             "subskriboj",
             "filtraj",
@@ -100,9 +100,9 @@ class TestGetDB:
         assert "delimejo" in cols
         assert cols.get("delimejo", "").upper() in ("TEXT",)
 
-    def test_mesagxoj_json_fields(self, db):
-        """Verify mesagxoj stores multi-value fields as JSON."""
-        cols = table_columns(db, "mesagxoj")
+    def test_mesagoj_json_fields(self, db):
+        """Verify mesagoj stores multi-value fields as JSON."""
+        cols = table_columns(db, "mesagoj")
         for field in ("al", "kc", "bkc", "aldonajxoj", "etikedoj"):
             assert field in cols, f"Missing JSON field: {field}"
 
@@ -124,9 +124,9 @@ class TestGetDB:
         """Verify essential indexes exist."""
         indexes = all_indexes(db)
         assert "idx_dosierujoj_konto" in indexes
-        assert "idx_mesagxoj_konto" in indexes
-        assert "idx_mesagxoj_konto_uid" in indexes
-        assert "idx_mesagxoj_dato" in indexes
+        assert "idx_mesagoj_konto" in indexes
+        assert "idx_mesagoj_konto_uid" in indexes
+        assert "idx_mesagoj_dato" in indexes
         assert "idx_aldonajxoj_mesagxo" in indexes
         assert "idx_kontaktoj_nomo" in indexes
         assert "idx_kontaktoj_retposto" in indexes
@@ -193,13 +193,17 @@ class TestMigrate:
         assert version == 0
 
     def test_migrate_noop_with_no_pending(self, db):
-        """Migrate on fresh DB should be a no-op (no pending).
-        Initial schema is created in get_db(), not in migrations.
+        """Migrate on fresh DB applies idempotent migrations only.
+
+        Migration 2 (mesagxoj -> mesagoj rename) is a no-op on fresh
+        installs because the old table never existed, but it still
+        gets recorded to prevent re-running on future upgrades.
         """
         applied = migrate(db)
-        assert applied == []
+        assert len(applied) == 1
+        assert "mesagxoj" in applied[0]
         version = get_schema_version(db)
-        assert version == 0
+        assert version == 2
 
 
 # ──────────────────────────────────────────────────────────────────────────────

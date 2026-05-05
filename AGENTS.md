@@ -83,7 +83,7 @@ All tables in `lien.db` at `A.core.paths.data_dir()`. WAL mode via `A.data.base.
 |-------|-------------|-------------|------|
 | `kontoj` | Email accounts | Yes | No |
 | `dosierujoj` | IMAP folders | No (manual) | No |
-| `mesagxoj` | Messages | No (manual) | No |
+| `mesagoj` | Messages | No (manual) | No |
 | `aldonajxoj` | Attachments | No (manual) | No |
 | `subskriboj` | Signatures | Yes | No |
 | `filtraj` | Sieve filters | Yes | No |
@@ -175,7 +175,7 @@ lien
 │   ├── vidi <uuid>               # View single message by UUID
 │   ├── serci                     # Search messages (FTS + filters)
 │   ├── dosierujoj                # List IMAP folders
-│   ├── mesagxoj                  # [DEPRECATED] Use serci instead
+│   ├── mesagoj                  # [DEPRECATED] Use serci instead
 │   ├── konton                    # Account management
 │   │   ├── ls                    #   List accounts
 │   │   ├── vidi                  #   View account details
@@ -240,7 +240,7 @@ lien
 
 ### Phase 4: IMAP + SMTP
 - `imap.py`, `smtp.py` — sync + send engines
-- CLI: `preni`, `sendi`, `dosierujoj`, `mesagxoj`, `montru`
+- CLI: `preni`, `sendi`, `dosierujoj`, `mesagoj`, `montru`
 - Signature management
 
 ### Phase 5: Filters + Polish

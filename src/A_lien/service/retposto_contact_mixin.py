@@ -63,7 +63,7 @@ class RetpostoContactMixin:
             konto_id: Account UUID whose messages to scan
         """
         rows = self.db.execute(
-            """SELECT de FROM mesagxoj
+            """SELECT de FROM mesagoj
                WHERE konto_id = ? AND legita = 0
                ORDER BY ricevita_je DESC LIMIT 100""",
             (konto_id,),
