@@ -30,30 +30,41 @@ def _rename_mesagxoj_to_mesagoj(conn: Any) -> None:
         "SELECT name FROM sqlite_master WHERE type='table' AND name='mesagxoj'"
     ).fetchone()
     if row:
+        conn.execute("DROP TABLE IF EXISTS mesagoj")
         conn.execute("ALTER TABLE mesagxoj RENAME TO mesagoj")
 
 
 def _imap_uid_migration(conn: Any) -> None:
-    """Migrate mesagoj: drop uid TEXT, add imap_uid INTEGER.
+    """Ensure mesagoj has imap_uid INTEGER column and its unique index.
 
-    Only runs if uid column still exists (legacy databases).
-    Fresh installs using the current schema already have imap_uid.
-
-    1. Drop old index referencing uid
-    2. Drop uid column (SQLite 3.35+)
-    3. Add imap_uid column
-    4. Add new partial unique index
+    Three scenarios:
+    1. Legacy DB:  uid TEXT exists, imap_uid missing
+       → drop old index, drop uid, add imap_uid, create new index
+    2. Fresh DB:   imap_uid exists (from DDL), uid missing
+       → create index only (column already exists)
+    3. Re-run:     both exist, index exists
+       → all IF NOT EXISTS → no-ops
     """
-    # Guard: skip if uid column doesn't exist (fresh install or already migrated)
-    row = conn.execute(
+    has_uid = conn.execute(
         "SELECT COUNT(*) as cnt FROM pragma_table_info('mesagoj') WHERE name='uid'"
     ).fetchone()
-    if not row or row["cnt"] == 0:
-        return
+    has_imap_uid = conn.execute(
+        "SELECT COUNT(*) as cnt FROM pragma_table_info('mesagoj') WHERE name='imap_uid'"
+    ).fetchone()
 
-    conn.execute("DROP INDEX IF EXISTS idx_mesagoj_konto_uid")
-    conn.execute("ALTER TABLE mesagoj DROP COLUMN uid")
-    conn.execute("ALTER TABLE mesagoj ADD COLUMN imap_uid INTEGER")
+    # Legacy cleanup: drop old uid column and its index
+    if has_uid and has_uid["cnt"] > 0:
+        # Index may be named with old diacritic name (idx_mesagxoj_*)
+        # if it was created before migration v2 renamed the table.
+        conn.execute("DROP INDEX IF EXISTS idx_mesagoj_konto_uid")
+        conn.execute("DROP INDEX IF EXISTS idx_mesagxoj_konto_uid")
+        conn.execute("ALTER TABLE mesagoj DROP COLUMN uid")
+
+    # Add imap_uid if column is missing (fresh DBs already have it)
+    if has_imap_uid and has_imap_uid["cnt"] == 0:
+        conn.execute("ALTER TABLE mesagoj ADD COLUMN imap_uid INTEGER")
+
+    # Always ensure the index exists (idempotent for all scenarios)
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_mesagoj_imap_uid "
         "ON mesagoj(konto_id, dosierujo_id, imap_uid) "
@@ -86,6 +97,7 @@ def _rename_mesagxoj_to_mesagoj(conn: Any) -> None:
         "SELECT name FROM sqlite_master WHERE type='table' AND name='mesagxoj'"
     ).fetchone()
     if row:
+        conn.execute("DROP TABLE IF EXISTS mesagoj")
         conn.execute("ALTER TABLE mesagxoj RENAME TO mesagoj")
 
 
