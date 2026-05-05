@@ -36,11 +36,21 @@ def _rename_mesagxoj_to_mesagoj(conn: Any) -> None:
 def _imap_uid_migration(conn: Any) -> None:
     """Migrate mesagoj: drop uid TEXT, add imap_uid INTEGER.
 
+    Only runs if uid column still exists (legacy databases).
+    Fresh installs using the current schema already have imap_uid.
+
     1. Drop old index referencing uid
     2. Drop uid column (SQLite 3.35+)
     3. Add imap_uid column
     4. Add new partial unique index
     """
+    # Guard: skip if uid column doesn't exist (fresh install or already migrated)
+    row = conn.execute(
+        "SELECT COUNT(*) as cnt FROM pragma_table_info('mesagoj') WHERE name='uid'"
+    ).fetchone()
+    if not row or row["cnt"] == 0:
+        return
+
     conn.execute("DROP INDEX IF EXISTS idx_mesagoj_konto_uid")
     conn.execute("ALTER TABLE mesagoj DROP COLUMN uid")
     conn.execute("ALTER TABLE mesagoj ADD COLUMN imap_uid INTEGER")
