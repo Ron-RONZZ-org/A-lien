@@ -194,16 +194,34 @@ class IMAPClient:
                 result.errors.append(f"Cannot select folder: {folder}")
                 return result
 
-            # Fetch all IMAP UIDs from server (stable per-folder identifiers)
-            typ, uid_data = self.conn.uid("search", None, "ALL")
-            if typ != "OK":
-                return result
+            # Fetch all IMAP UIDs from server (stable per-folder identifiers).
+            # Some servers cap SEARCH at ~5000 results — paginate if needed.
+            all_uids: list[int] = []
+            search_uid_from = None  # None = "ALL"
+            while True:
+                if search_uid_from is not None:
+                    typ, uid_data = self.conn.uid(
+                        "search", None, f"UID {search_uid_from}:*",
+                    )
+                else:
+                    typ, uid_data = self.conn.uid("search", None, "ALL")
 
-            if not uid_data[0]:
-                self.conn.close()
-                return result
+                if typ != "OK":
+                    return result
+                if not uid_data or not uid_data[0]:
+                    break
 
-            all_uids = [int(x) for x in uid_data[0].split()]
+                chunk = [int(x) for x in uid_data[0].split()]
+                if not chunk:
+                    break
+                all_uids.extend(chunk)
+
+                # If result count is suspiciously round, try fetching more
+                if len(chunk) in (5000, 10000, 20000):
+                    search_uid_from = chunk[-1] + 1
+                else:
+                    break
+
             result.total = len(all_uids)
 
             # Filter out already-synced UIDs
@@ -234,20 +252,25 @@ class IMAPClient:
                     )
                     continue
 
-                for i in range(0, len(fetch_data), 2):
-                    if not isinstance(fetch_data[i], tuple):
+                for item in fetch_data:
+                    if not isinstance(item, tuple):
                         continue
+                    raw_flags = item[0] if item[0] else b""
+                    raw_data = item[1]
+                    imap_uid = -1  # placeholder for error messages
                     try:
                         # Extract IMAP UID from FETCH response
-                        uid_match = _IMAP_UID_RE.search(fetch_data[i][0])
+                        uid_match = _IMAP_UID_RE.search(raw_flags)
                         if not uid_match:
+                            result.errors.append(
+                                f"UID regex failed on: {raw_flags[:200]!r}"
+                            )
                             continue
                         imap_uid = int(uid_match.group(1))
 
                         if imap_uid in known_uids:
                             continue
 
-                        raw_data = fetch_data[i][1]
                         msg = email_lib.message_from_bytes(raw_data)
 
                         self._store_message(
