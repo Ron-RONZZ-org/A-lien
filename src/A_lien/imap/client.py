@@ -194,10 +194,14 @@ class IMAPClient:
                 result.errors.append(f"Cannot select folder: {folder}")
                 return result
 
+            # Get mailbox message count from SELECT response
+            mailbox_count = int(data[0]) if data and data[0] else 0
+
             # Fetch all IMAP UIDs from server (stable per-folder identifiers).
             # Some servers cap SEARCH at ~5000 results — paginate if needed.
+            use_uid_fetch = True
             all_uids: list[int] = []
-            search_uid_from = None  # None = "ALL"
+            search_uid_from: int | None = None  # None = "ALL"
             while True:
                 if search_uid_from is not None:
                     typ, uid_data = self.conn.uid(
@@ -207,6 +211,9 @@ class IMAPClient:
                     typ, uid_data = self.conn.uid("search", None, "ALL")
 
                 if typ != "OK":
+                    result.errors.append(
+                        f"UID SEARCH failed for {folder}"
+                    )
                     return result
                 if not uid_data or not uid_data[0]:
                     break
@@ -221,6 +228,19 @@ class IMAPClient:
                     search_uid_from = chunk[-1] + 1
                 else:
                     break
+
+            # If UID SEARCH returned far fewer than mailbox contains,
+            # the server might not support UID SEARCH properly.
+            # Fall back to regular SEARCH (returns sequence numbers).
+            if mailbox_count > 0 and len(all_uids) < mailbox_count // 2:
+                result.errors.append(
+                    f"UID SEARCH returned {len(all_uids)} of {mailbox_count} "
+                    f"messages for {folder} — falling back to SEARCH"
+                )
+                use_uid_fetch = False
+                typ, seq_data = self.conn.search(None, "ALL")
+                if typ == "OK" and seq_data and seq_data[0]:
+                    all_uids = [int(x) for x in seq_data[0].split()]
 
             result.total = len(all_uids)
 
@@ -243,12 +263,17 @@ class IMAPClient:
                 chunk = new_uids[start : start + chunk_size]
                 uid_list = b",".join(str(u).encode() for u in chunk)
 
-                typ, fetch_data = self.conn.uid(
-                    "fetch", uid_list, "(FLAGS BODY.PEEK[])",
-                )
+                if use_uid_fetch:
+                    typ, fetch_data = self.conn.uid(
+                        "fetch", uid_list, "(FLAGS BODY.PEEK[] UID)",
+                    )
+                else:
+                    typ, fetch_data = self.conn.fetch(
+                        uid_list, "(FLAGS BODY.PEEK[] UID)",
+                    )
                 if typ != "OK":
                     result.errors.append(
-                        f"FETCH error at UIDs {chunk[0]}..{chunk[-1]}"
+                        f"FETCH error at IDs {chunk[0]}..{chunk[-1]}"
                     )
                     continue
 
