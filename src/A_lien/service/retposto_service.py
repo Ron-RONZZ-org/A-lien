@@ -167,18 +167,9 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
         """Get account details (password never included)."""
         return self.get(uuid)
 
-    def find_by_uuid_prefix(self, prefix: str) -> list[dict[str, Any]]:
-        """Find accounts by UUID prefix (for short UUIDs like '11a31fb9').
-        
-        Returns all accounts where uuid starts with prefix.
-        """
-        if not prefix:
-            return []
-        results = self.db.execute(
-            "SELECT * FROM kontoj WHERE uuid LIKE ?",
-            (f"{prefix}%",),
-        )
-        return [r for r in results]
+    def find_by_uuid_prefix(self, prefix: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Find accounts by UUID prefix (uses core CRUD method)."""
+        return super().find_by_uuid_prefix(prefix, limit=limit)
 
     def list_accounts(self) -> list[dict[str, Any]]:
         """List all accounts (password never included)."""

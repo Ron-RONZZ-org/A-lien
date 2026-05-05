@@ -218,11 +218,9 @@ class KontaktoService(CRUDService, KontaktoVCFMixin, KontaktoCategoryMixin):
         )
         return self._deserialize_row(row)
 
-    def find_by_uuid_prefix(self, prefix: str) -> list[dict[str, Any]]:
-        """Find contacts whose UUID starts with prefix."""
-        rows = self.db.execute(
-            "SELECT * FROM kontaktoj WHERE uuid LIKE ?", (f"{prefix}%",)
-        )
+    def find_by_uuid_prefix(self, prefix: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Find contacts whose UUID starts with prefix (uses core CRUD method)."""
+        rows = super().find_by_uuid_prefix(prefix, limit=limit)
         return [self._deserialize_row(row) for row in rows]
 
     def find_duplicates(
