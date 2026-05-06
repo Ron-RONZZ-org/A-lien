@@ -112,7 +112,7 @@ class IMAPClient:
         if self._conn:
             try:
                 self._conn.logout()
-            except Exception:
+            except Exception:  # noqa: S110 — cleanup, ignore errors
                 pass
             self._conn = None
 
@@ -181,7 +181,7 @@ class IMAPClient:
                 "VALUES (?, ?, ?, ?, ?, ?)",
                 (dosierujo_id, konto_id, folder_name, None, now, now),
             )
-        except Exception:
+        except Exception:  # noqa: S110 — INSERT OR IGNORE, non-fatal
             pass
         return dosierujo_id
 
@@ -361,7 +361,7 @@ class IMAPClient:
             try:
                 dt = parsedate_to_datetime(date_str)
                 ricevita_je = dt.isoformat()
-            except Exception:
+            except (TypeError, ValueError):  # noqa: S110 — invalid date, use current time
                 pass
 
         body = ""

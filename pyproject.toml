@@ -55,3 +55,9 @@ ruff = "^0.4.0"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+select = ["S110", "S112"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S110", "S112"]

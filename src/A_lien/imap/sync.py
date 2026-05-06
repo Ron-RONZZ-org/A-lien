@@ -45,7 +45,7 @@ def sync_account(
             ))
             try:
                 client._ensure_folder(konto_id, folder_name, db_store)
-            except Exception:
+            except Exception:  # noqa: S110 — folder already exists, non-fatal
                 pass
             fr = client.sync_folder(
                 folder_name, konto_id, dosierujo_id, db_store,

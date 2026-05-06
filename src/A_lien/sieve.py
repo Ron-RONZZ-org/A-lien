@@ -95,7 +95,7 @@ class SieveManager:
         if self._client:
             try:
                 self._client.logout()
-            except Exception:
+            except Exception:  # noqa: S110 — cleanup, ignore errors
                 pass
             self._client = None
 
