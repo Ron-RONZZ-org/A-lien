@@ -395,6 +395,21 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             "SELECT * FROM mesagoj WHERE uuid = ? AND forigita = 0", (uuid,)
         )
 
+    def get_attachments(self, msg_uuid: str) -> list[dict[str, Any]]:
+        """Get attachments for a message from the aldonajxoj table.
+
+        Args:
+            msg_uuid: Message UUID
+
+        Returns:
+            List of attachment dicts (uuid, dosiernomo, mime_tipo, grandeco, vojo)
+        """
+        return list(self.db.execute(
+            "SELECT uuid, dosiernomo, mime_tipo, grandeco, vojo "
+            "FROM aldonajxoj WHERE mesagxo_id = ? ORDER BY dosiernomo",
+            (msg_uuid,),
+        ))
+
     def find_message_by_uuid_prefix(self, prefix: str) -> list[dict[str, Any]]:
         """Find non-deleted messages by UUID prefix (e.g. first 8 characters).
 

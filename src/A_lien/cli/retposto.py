@@ -1,6 +1,6 @@
 """Retposto commands — email operations.
 
-Commands: preni, sendi, respondi, vidi, forigi, movi, serci, dosierujoj, mesagoj
+Commands: preni, sendi, respondi, plusendi, vidi, forigi, movi, serci, dosierujoj, mesagoj
 """
 
 from __future__ import annotations
@@ -235,15 +235,15 @@ def retposto_sendi(
         ),
     ),
     account: str = typer.Option(
-        "", "--konto", "-a",
+        "", "--konto", "-k",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
     attach: list[str] = typer.Option(
-        [], "--alglui",
+        [], "--alglui", "-a",
         help=tr_multi(
-            "Dosiero algluenda",
-            "File to attach",
-            "Fichier à joindre",
+            "Dosiero algluenda (ripetebla)",
+            "File to attach (repeatable)",
+            "Fichier à joindre (répétable)",
         ),
     ),
 ) -> None:
@@ -341,6 +341,34 @@ def retposto_vidi_mesago(
         body = msg.get("korpo", "")
     lines.append(body)
 
+    # Append attachments info
+    attachments = svc.get_attachments(msg["uuid"])
+    if attachments:
+        lines.append("")
+        lines.append("-" * 40)
+        lines.append(tr_multi("Aldonaĵoj:", "Attachments:", "Pièces jointes:"))
+        for att in attachments:
+            size = att.get("grandeco", 0)
+            size_str = f"{size / 1024:.1f} KB" if size > 1024 else f"{size} B"
+            lines.append(f"  {att['dosiernomo']} ({size_str}) [{att.get('mime_tipo', '?')}]")
+    else:
+        # Fallback: check inline JSON column
+        aldonajxoj = msg.get("aldonajxoj", "[]")
+        if isinstance(aldonajxoj, str):
+            try:
+                import json
+                aldonajxoj = json.loads(aldonajxoj) if aldonajxoj.strip() else []
+            except (json.JSONDecodeError, TypeError):
+                aldonajxoj = []
+        if aldonajxoj:
+            lines.append("")
+            lines.append("-" * 40)
+            lines.append(tr_multi("Aldonaĵoj:", "Attachments:", "Pièces jointes:"))
+            for att in aldonajxoj:
+                if isinstance(att, dict):
+                    name = att.get("dosiernomo", att.get("filename", "?"))
+                    lines.append(f"  {name}")
+
     email_text = "\n".join(lines)
 
     # Open in editor or print
@@ -369,9 +397,12 @@ from A_lien.cli.retposto_message_ops import (  # noqa: E402
     retposto_forigi,
     retposto_movi,
 )
+from A_lien.cli.retposto_plusendi import retposto_plusendi  # noqa: E402
+
 retposto.command(name="respondi")(retposto_respondi)
 retposto.command(name="forigi")(retposto_forigi)
 retposto.command(name="movi")(retposto_movi)
+retposto.command(name="plusendi")(retposto_plusendi)
 
 
 @retposto.command("dosierujoj")

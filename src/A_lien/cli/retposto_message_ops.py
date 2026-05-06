@@ -96,7 +96,7 @@ def retposto_respondi(
         ),
     ),
     account: str = typer.Option(
-        "", "--konto", "-a",
+        "", "--konto", "-k",
         help=tr_multi(
             "Konto UUID (defaultingas al mesaĝa konto)",
             "Account UUID (defaults to message's account)",
@@ -104,7 +104,7 @@ def retposto_respondi(
         ),
     ),
     attach: list[str] = typer.Option(
-        [], "--alglui",
+        [], "--alglui", "-a",
         help=tr_multi(
             "Dosiero algluenda",
             "File to attach",
