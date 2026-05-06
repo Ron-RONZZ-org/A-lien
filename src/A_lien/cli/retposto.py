@@ -401,6 +401,29 @@ retposto.command(name="movi")(retposto_movi)
 retposto.command(name="plusendi")(retposto_plusendi)
 
 
+@retposto.command("sxuti")
+def retposto_sxuti() -> None:
+    """Sxuti flagojn al servilo (legita, forigita).
+
+    Processes the sync backlog — local read/delete flag changes
+    that have not yet been synced to the IMAP server are sent now.
+    """
+    svc = get_retposto_service()
+    count = svc.process_sync_backlog()
+    if count:
+        info(tr_multi(
+            f"{count} flago(j) sinkronigitaj al servilo",
+            f"{count} flag(s) synced to server",
+            f"{count} flag(s) synchronisé(s) au serveur",
+        ))
+    else:
+        info(tr_multi(
+            "Neniuj flagoj por sinkronigi",
+            "No flags to sync",
+            "Aucun flag à synchroniser",
+        ))
+
+
 @retposto.command("dosierujoj")
 def retposto_dosierujoj(
     account: str = typer.Option(
