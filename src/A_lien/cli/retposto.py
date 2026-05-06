@@ -315,7 +315,11 @@ def retposto_vidi_mesago(
         if html_body:
             from A.core.markdown_html_view import preview_html
 
-            preview_html(html_body, open_browser=True)
+            preview_html(
+                html_body,
+                open_browser=True,
+                title=msg.get("subjekto", "Mesaĝo"),
+            )
         else:
             error(tr_multi(
                 "Neniu HTML-enhavo por ĉi tiu mesaĝo.",
@@ -351,23 +355,6 @@ def retposto_vidi_mesago(
             size = att.get("grandeco", 0)
             size_str = f"{size / 1024:.1f} KB" if size > 1024 else f"{size} B"
             lines.append(f"  {att['dosiernomo']} ({size_str}) [{att.get('mime_tipo', '?')}]")
-    else:
-        # Fallback: check inline JSON column
-        aldonajxoj = msg.get("aldonajxoj", "[]")
-        if isinstance(aldonajxoj, str):
-            try:
-                import json
-                aldonajxoj = json.loads(aldonajxoj) if aldonajxoj.strip() else []
-            except (json.JSONDecodeError, TypeError):
-                aldonajxoj = []
-        if aldonajxoj:
-            lines.append("")
-            lines.append("-" * 40)
-            lines.append(tr_multi("Aldonaĵoj:", "Attachments:", "Pièces jointes:"))
-            for att in aldonajxoj:
-                if isinstance(att, dict):
-                    name = att.get("dosiernomo", att.get("filename", "?"))
-                    lines.append(f"  {name}")
 
     email_text = "\n".join(lines)
 

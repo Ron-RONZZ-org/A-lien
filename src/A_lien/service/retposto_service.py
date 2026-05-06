@@ -396,19 +396,57 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
         )
 
     def get_attachments(self, msg_uuid: str) -> list[dict[str, Any]]:
-        """Get attachments for a message from the aldonajxoj table.
+        """Get attachments for a message.
+
+        Checks both the ``aldonajxoj`` table (for IMAP-stored attachments)
+        and the inline JSON ``aldonajxoj`` column on the message itself.
 
         Args:
             msg_uuid: Message UUID
 
         Returns:
-            List of attachment dicts (uuid, dosiernomo, mime_tipo, grandeco, vojo)
+            List of attachment dicts with keys: dosiernomo, mime_tipo, grandeco, vojo
         """
-        return list(self.db.execute(
+        # First try the aldonajxoj table
+        table_rows = list(self.db.execute(
             "SELECT uuid, dosiernomo, mime_tipo, grandeco, vojo "
             "FROM aldonajxoj WHERE mesagxo_id = ? ORDER BY dosiernomo",
             (msg_uuid,),
         ))
+        if table_rows:
+            return table_rows
+
+        # Fallback: parse inline JSON column on the message
+        msg = self.get_message(msg_uuid)
+        if not msg:
+            return []
+        raw = msg.get("aldonajxoj", "[]")
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw) if raw.strip() else []
+            except (json.JSONDecodeError, TypeError):
+                raw = []
+        if not isinstance(raw, list):
+            return []
+        result = []
+        for item in raw:
+            if isinstance(item, dict):
+                result.append({
+                    "uuid": item.get("uuid", ""),
+                    "dosiernomo": item.get("dosiernomo", item.get("filename", "")),
+                    "mime_tipo": item.get("mime_tipo", item.get("mime", "")),
+                    "grandeco": item.get("grandeco", item.get("size", 0)),
+                    "vojo": item.get("vojo", ""),
+                })
+            elif isinstance(item, str):
+                result.append({
+                    "uuid": "",
+                    "dosiernomo": item,
+                    "mime_tipo": "",
+                    "grandeco": 0,
+                    "vojo": "",
+                })
+        return result
 
     def find_message_by_uuid_prefix(self, prefix: str) -> list[dict[str, Any]]:
         """Find non-deleted messages by UUID prefix (e.g. first 8 characters).
