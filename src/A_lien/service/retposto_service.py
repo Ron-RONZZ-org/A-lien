@@ -163,6 +163,36 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
         self.delete(uuid, soft=True)
         self.delete_password(uuid)
 
+    def delete_accounts(self, uuids: list[str]) -> list[dict[str, object | str]]:
+        """Bulk-delete accounts, returning per-UUID results.
+
+        Each result dict has:
+        - ``uuid``: the account UUID (truncated to 8 chars)
+        - ``success``: whether deletion succeeded
+        - ``error``: error message if failed, else ``None``
+
+        Args:
+            uuids: List of account UUIDs to delete
+
+        Returns:
+            List of result dicts, one per UUID
+        """
+        import traceback
+
+        results: list[dict[str, object | str]] = []
+        for uid in uuids:
+            try:
+                self.delete(uid, soft=True)
+                self.delete_password(uid)
+                results.append({"uuid": uid, "success": True, "error": None})
+            except Exception as e:
+                results.append({
+                    "uuid": uid,
+                    "success": False,
+                    "error": str(e),
+                })
+        return results
+
     def get_account(self, uuid: str) -> dict[str, Any] | None:
         """Get account details (password never included)."""
         return self.get(uuid)
