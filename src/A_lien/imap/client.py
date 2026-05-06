@@ -123,34 +123,47 @@ class IMAPClient:
             typ, data = self.conn.list()
             if typ != "OK":
                 return result
+            # Regex to extract folder name from LIST response:
+            #   (\Flags) "/" "QuotedName"  or  (\Flags) "/" UnquotedName
+            _folder_re = re.compile(rb'"/" "?([^"]+)"?\s*$')
             for line in data:
                 if not line:
                     continue
-                decoded = line.decode("utf-8", errors="replace")
-                parts = decoded.split('"')
-                if len(parts) >= 3:
-                    flags_str = parts[0].strip("() ")
-                    name = parts[-2].strip()
-                    if not name or name == "/":
-                        if "\\Sent" in flags_str:
-                            name = "Sent"
-                        elif "\\Drafts" in flags_str:
-                            name = "Drafts"
-                        elif "\\Trash" in flags_str:
-                            name = "Trash"
-                        elif "\\Junk" in flags_str:
-                            name = "Junk"
-                        elif "\\Archive" in flags_str:
-                            name = "Archive"
-                        elif "\\Inbox" in flags_str:
-                            name = "INBOX"
-                        else:
-                            continue
-                    result.append({
-                        "name": name,
-                        "delimiter": "/",
-                        "flags": flags_str.split() if flags_str else [],
-                    })
+                m = _folder_re.search(line)
+                if m:
+                    name = m.group(1).decode("utf-8", errors="replace").strip()
+                else:
+                    # Fallback for unusual formats: split by quotes
+                    decoded = line.decode("utf-8", errors="replace")
+                    parts = decoded.split('"')
+                    if len(parts) >= 3:
+                        # parts[2] has the folder name (may be quoted or bare)
+                        name = parts[-2].strip() if len(parts) == 3 else parts[2].strip()
+                    else:
+                        continue
+                if not name or name == "/":
+                    # Bare separator — use flags to identify special folders
+                    decoded = line.decode("utf-8", errors="replace")
+                    flags_str = decoded.split('"')[0].strip("() ")
+                    if "\\Sent" in flags_str:
+                        name = "Sent"
+                    elif "\\Drafts" in flags_str:
+                        name = "Drafts"
+                    elif "\\Trash" in flags_str:
+                        name = "Trash"
+                    elif "\\Junk" in flags_str:
+                        name = "Junk"
+                    elif "\\Archive" in flags_str:
+                        name = "Archive"
+                    elif "\\Inbox" in flags_str:
+                        name = "INBOX"
+                    else:
+                        continue
+                result.append({
+                    "name": name,
+                    "delimiter": "/",
+                    "flags": [],
+                })
         except Exception:
             pass
         return result
