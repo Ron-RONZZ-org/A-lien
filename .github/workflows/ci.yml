@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install A-core from source
+        run: |
+          git clone https://github.com/Ron-RONZZ-org/A-core.git /tmp/A-core
+          uv pip install -e /tmp/A-core
+
+      - name: Install A-lien
+        run: uv pip install -e ".[dev]"
+
+      - name: Run unit tests
+        run: python -m pytest tests/ -v --ignore=tests/test_imap_integration.py -x
+
+      - name: Run integration tests
+        if: ${{ secrets.A_TEST1_IMAP_USER != '' }}
+        env:
+          A_TEST1_IMAP_USER: ${{ secrets.A_TEST1_IMAP_USER }}
+          A_TEST1_IMAP_PASS: ${{ secrets.A_TEST1_IMAP_PASS }}
+        run: python -m pytest tests/test_imap_integration.py -v -x

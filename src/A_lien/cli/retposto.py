@@ -119,12 +119,25 @@ def retposto_preni(
             "UUID ou préfixe de compte spécifique",
         ),
     ),
+    debug_imap: bool = typer.Option(
+        False, "--debug-imap",
+        help=tr_multi(
+            "Montri krudajn IMAP-komandojn kaj respondojn",
+            "Show raw IMAP commands and responses",
+            "Afficher les commandes et réponses IMAP brutes",
+        ),
+    ),
 ) -> None:
     """Fetch mail from accounts.
 
     By default syncs all accounts with passwords.
     Use --konto to sync a single account (by UUID or prefix).
     """
+    # Enable IMAP debug logging globally
+    if debug_imap:
+        import imaplib
+        imaplib.IMAP4.debug = 4  # Max verbosity
+
     svc = get_retposto_service()
 
     if account:
