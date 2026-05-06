@@ -390,13 +390,13 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
     # ── Message search ─────────────────────────────────────────────────────────
 
     def get_message(self, uuid: str) -> dict[str, Any] | None:
-        """Get a message by UUID (queries mesagoj table directly)."""
+        """Get a non-deleted message by UUID (queries mesagoj table directly)."""
         return self.db.execute_one(
-            "SELECT * FROM mesagoj WHERE uuid = ?", (uuid,)
+            "SELECT * FROM mesagoj WHERE uuid = ? AND forigita = 0", (uuid,)
         )
 
     def find_message_by_uuid_prefix(self, prefix: str) -> list[dict[str, Any]]:
-        """Find messages by UUID prefix (e.g. first 8 characters).
+        """Find non-deleted messages by UUID prefix (e.g. first 8 characters).
 
         Args:
             prefix: First N characters of a message UUID
@@ -408,9 +408,22 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             return []
         return list(
             self.db.execute(
-                "SELECT * FROM mesagoj WHERE uuid LIKE ?",
+                "SELECT * FROM mesagoj WHERE uuid LIKE ? AND forigita = 0",
                 (f"{prefix}%",),
             )
+        )
+
+    def mark_read(self, msg_uuid: str, legita: bool = True) -> None:
+        """Mark a message as read or unread.
+
+        Args:
+            msg_uuid: Message UUID
+            legita: True for read, False for unread
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        self.db.execute(
+            "UPDATE mesagoj SET legita = ?, modifita_je = ? WHERE uuid = ?",
+            (1 if legita else 0, now, msg_uuid),
         )
 
     def search_messages(
@@ -493,9 +506,9 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
         # Build query
         if conditions:
             where = " AND ".join(conditions)
-            sql = f"SELECT * FROM mesagoj WHERE {where} ORDER BY ricevita_je DESC LIMIT ?"
+            sql = f"SELECT * FROM mesagoj WHERE {where} AND forigita = 0 ORDER BY ricevita_je DESC LIMIT ?"
         else:
-            sql = "SELECT * FROM mesagoj ORDER BY ricevita_je DESC LIMIT ?"
+            sql = "SELECT * FROM mesagoj WHERE forigita = 0 ORDER BY ricevita_je DESC LIMIT ?"
 
         params.append(limit)
 
@@ -503,7 +516,7 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             rows = self.db.execute(sql, tuple(params))
         except Exception:
             # Fallback to simple query
-            sql = "SELECT * FROM mesagoj ORDER BY ricevita_je DESC LIMIT ?"
+            sql = "SELECT * FROM mesagoj WHERE forigita = 0 ORDER BY ricevita_je DESC LIMIT ?"
             rows = self.db.execute(sql, (limit,))
 
         return list(rows)

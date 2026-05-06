@@ -307,6 +307,9 @@ def retposto_vidi_mesago(
     svc = get_retposto_service()
     msg = _resolve_message(svc, uuid)
 
+    # Mark as read
+    svc.mark_read(msg["uuid"])
+
     # Build email text
     lines = [
         f"From: {msg.get('de', '')}",
