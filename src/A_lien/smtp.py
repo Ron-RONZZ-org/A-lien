@@ -95,6 +95,7 @@ class SMTPClient:
         bcc: list[str] | None = None,
         attachments: list[str | Path] | None = None,
         html_body: str = "",
+        priority: int = 5,
     ) -> None:
         """Send an email message.
 
@@ -107,6 +108,7 @@ class SMTPClient:
             bcc: Blind carbon copy recipients
             attachments: List of file paths to attach
             html_body: Optional HTML body (alternative to plain text)
+            priority: Priority level (1=highest, 5=lowest)
 
         Raises:
             ConnectionError: If sending fails
@@ -141,6 +143,19 @@ class SMTPClient:
             msg["To"] = ", ".join(to)
             if cc:
                 msg["Cc"] = ", ".join(cc)
+
+        # Set priority headers (1=highest, 5=lowest)
+        if priority != 5:
+            msg["X-Priority"] = str(priority)
+            if priority <= 2:
+                msg["X-MSMail-Priority"] = "High"
+                msg["Importance"] = "High"
+            elif priority >= 4:
+                msg["X-MSMail-Priority"] = "Low"
+                msg["Importance"] = "Low"
+            else:
+                msg["X-MSMail-Priority"] = "Normal"
+                msg["Importance"] = "Normal"
 
         try:
             self.conn.sendmail(from_addr, all_recipients, msg.as_string())

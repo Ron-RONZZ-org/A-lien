@@ -1,6 +1,6 @@
 """Retposto commands — email operations.
 
-Commands: preni, sendi, vidi, serci, dosierujoj, mesagoj
+Commands: preni, sendi, respondi, vidi, forigi, movi, serci, dosierujoj, mesagoj
 """
 
 from __future__ import annotations
@@ -218,6 +218,22 @@ def retposto_sendi(
             "CC (séparé par;)",
         ),
     ),
+    bcc: str = typer.Option(
+        "", "--bcc",
+        help=tr_multi(
+            "SKK (punktokomo-separita)",
+            "BCC (comma-separated)",
+            "BCC (séparé par;)",
+        ),
+    ),
+    priority: int = typer.Option(
+        5, "--prioritato", "-p",
+        help=tr_multi(
+            "Prioritato (1-5, 1=plej alta)",
+            "Priority (1-5, 1=highest)",
+            "Priorité (1-5, 1=la plus haute)",
+        ),
+    ),
     account: str = typer.Option(
         "", "--konto", "-a",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
@@ -247,6 +263,7 @@ def retposto_sendi(
 
     recipients = [r.strip() for r in to.split(",") if r.strip()]
     cc_list = [r.strip() for r in cc.split(",") if r.strip()] if cc else None
+    bcc_list = [r.strip() for r in bcc.split(",") if r.strip()] if bcc else None
 
     try:
         svc.send_email(
@@ -255,7 +272,9 @@ def retposto_sendi(
             subject=subject,
             body=body,
             cc=cc_list,
+            bcc=bcc_list,
             attachments=attach or None,
+            priority=priority,
         )
         info(tr_multi(
             f"Mesaĝo sendita al {to}",
@@ -327,6 +346,15 @@ def retposto_vidi_mesago(
 # Import and register serci from retposto_search.py
 from A_lien.cli.retposto_search import retposto_serci  # noqa: E402
 retposto.command(name="serci")(retposto_serci)
+
+from A_lien.cli.retposto_message_ops import (  # noqa: E402
+    retposto_respondi,
+    retposto_forigi,
+    retposto_movi,
+)
+retposto.command(name="respondi")(retposto_respondi)
+retposto.command(name="forigi")(retposto_forigi)
+retposto.command(name="movi")(retposto_movi)
 
 
 @retposto.command("dosierujoj")

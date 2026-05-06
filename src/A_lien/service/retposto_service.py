@@ -299,6 +299,9 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
         cc: list[str] | None = None,
         bcc: list[str] | None = None,
         attachments: list[str] | None = None,
+        priority: int = 5,
+        in_reply_to: str = "",
+        references: str = "",
     ) -> None:
         """Send an email via SMTP, save a copy, and auto-create contacts.
 
@@ -310,6 +313,9 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             cc: CC recipients
             bcc: BCC recipients
             attachments: File paths
+            priority: Priority level (1=highest, 5=lowest)
+            in_reply_to: Message-ID being replied to
+            references: References header for threading
 
         Raises:
             ConnectionError, ValueError
@@ -342,6 +348,7 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
                 cc=cc,
                 bcc=bcc,
                 attachments=attachments or [],
+                priority=priority,
             )
         finally:
             client.disconnect()
@@ -358,8 +365,8 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             "konto_id": account_uuid,
             "dosierujo_id": "",
             "message_id": f"sent-{uuid_mod.uuid4()}",
-            "in_reply_to": "",
-            "references_hdr": "",
+            "in_reply_to": in_reply_to,
+            "references_hdr": references,
             "de": sender_email,
             "al": json.dumps(to, ensure_ascii=False),
             "kc": json.dumps(cc, ensure_ascii=False),
@@ -367,7 +374,7 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             "subjekto": subject,
             "korpo": body,
             "html_korpo": "",
-            "prioritato": 5,
+            "prioritato": priority,
             "legita": 1,
             "stelo": 0,
             "spamo": 0,
@@ -500,6 +507,144 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             rows = self.db.execute(sql, (limit,))
 
         return list(rows)
+
+    # ── Message operations (trash, move) ─────────────────────────────────────
+
+    def trash_message(self, msg_uuid: str, permanent: bool = False) -> None:
+        """Soft-delete or hard-delete a message.
+
+        Args:
+            msg_uuid: Message UUID
+            permanent: If True, delete permanently instead of marking as trash
+        """
+        if permanent:
+            self.db.execute("DELETE FROM mesagoj WHERE uuid = ?", (msg_uuid,))
+        else:
+            now = datetime.now(timezone.utc).isoformat()
+            self.db.execute(
+                "UPDATE mesagoj SET forigita = 1, modifita_je = ? WHERE uuid = ?",
+                (now, msg_uuid),
+            )
+
+    def move_message(
+        self,
+        msg: dict,
+        dest_account_uuid: str,
+        dest_folder: str,
+    ) -> None:
+        """Move a message to a different account/folder.
+
+        If same server: uses IMAP MOVE or COPY+DELETE.
+        If different server: downloads raw message, appends, deletes original.
+
+        Args:
+            msg: The message dict (must include konto_id, dosierujo_id, uid)
+            dest_account_uuid: Destination account UUID
+            dest_folder: Destination folder name (e.g. 'INBOX', 'Archive')
+        """
+        src_account_uuid = msg.get("konto_id", "")
+        src_account = self.get_account_with_password(src_account_uuid)
+        dest_account = self.get_account_with_password(dest_account_uuid)
+
+        if not src_account or "password" not in src_account:
+            raise ValueError(f"Source account {src_account_uuid[:8]} has no password")
+        if not dest_account or "password" not in dest_account:
+            raise ValueError(f"Destination account {dest_account_uuid[:8]} has no password")
+
+        from A_lien.imap.client import IMAPClient
+
+        imap = IMAPClient(
+            host=src_account.get("imap_servilo", ""),
+            port=src_account.get("imap_haveno", 993),
+            use_ssl=src_account.get("imap_ssl", 1) == 1,
+        )
+
+        try:
+            imap.connect(
+                username=src_account.get("imap_uzantonomo", "")
+                          or src_account.get("retposto", ""),
+                password=src_account["password"],
+            )
+
+            # Determine source folder name from dosierujo_id
+            src_folder_row = self.db.execute_one(
+                "SELECT nomo FROM dosierujoj WHERE uuid = ?",
+                (msg.get("dosierujo_id", ""),),
+            )
+            src_folder = src_folder_row["nomo"] if src_folder_row else "INBOX"
+            uid = int(msg.get("uid", 0))
+
+            same_account = src_account_uuid == dest_account_uuid
+
+            if same_account:
+                # Same-account folder move
+                imap.move_message(src_folder, uid, dest_folder)
+                # Update local DB
+                dest_folder_id = self._ensure_folder_exists(
+                    dest_account_uuid, dest_folder
+                )
+                now = datetime.now(timezone.utc).isoformat()
+                self.db.execute(
+                    "UPDATE mesagoj SET dosierujo_id = ?, modifita_je = ? WHERE uuid = ?",
+                    (dest_folder_id, now, msg["uuid"]),
+                )
+            else:
+                # Cross-account: fetch raw, append, delete original
+                raw = imap.fetch_raw_message(src_folder, uid)
+                if not raw:
+                    raise ValueError(
+                        f"Could not fetch raw message (UID {uid})"
+                    )
+
+                # Connect to destination IMAP
+                dest_imap = IMAPClient(
+                    host=dest_account.get("imap_servilo", ""),
+                    port=dest_account.get("imap_haveno", 993),
+                    use_ssl=dest_account.get("imap_ssl", 1) == 1,
+                )
+                try:
+                    dest_imap.connect(
+                        username=dest_account.get("imap_uzantonomo", "")
+                                  or dest_account.get("retposto", ""),
+                        password=dest_account["password"],
+                    )
+                    dest_imap.append_message(dest_folder, raw)
+                finally:
+                    dest_imap.disconnect()
+
+                # Delete original
+                imap.delete_message(src_folder, uid)
+
+                # Update local DB
+                dest_folder_id = self._ensure_folder_exists(
+                    dest_account_uuid, dest_folder
+                )
+                now = datetime.now(timezone.utc).isoformat()
+                self.db.execute(
+                    "UPDATE mesagoj SET konto_id = ?, dosierujo_id = ?, "
+                    "modifita_je = ? WHERE uuid = ?",
+                    (dest_account_uuid, dest_folder_id, now, msg["uuid"]),
+                )
+        finally:
+            imap.disconnect()
+
+    def _ensure_folder_exists(self, konto_id: str, folder_name: str) -> str:
+        """Ensure an IMAP folder exists in local DB, return its UUID."""
+        import uuid as uuid_mod
+        row = self.db.execute_one(
+            "SELECT uuid FROM dosierujoj WHERE konto_id = ? AND nomo = ?",
+            (konto_id, folder_name),
+        )
+        if row:
+            return row["uuid"]
+        folder_uuid = str(uuid_mod.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        self.db.execute(
+            "INSERT INTO dosierujoj (uuid, konto_id, nomo, kreita_je, modifita_je) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (folder_uuid, konto_id, folder_name, now, now),
+        )
+        return folder_uuid
 
 
 def get_retposto_service() -> RetpostoService:

@@ -415,6 +415,87 @@ class IMAPClient:
         stored_uuid = db_store.store_message(data)
         return stored_uuid
 
+    # ── Message operations (move, delete, append) ────────────────────────────
+
+    def move_message(
+        self, source_folder: str, uid: int, target_folder: str
+    ) -> bool:
+        """Move a message via IMAP MOVE (RFC 6851) or COPY+DELETE fallback.
+
+        Args:
+            source_folder: Source folder name
+            uid: IMAP UID of the message
+            target_folder: Target folder name
+
+        Returns:
+            True if the move succeeded, False otherwise
+        """
+        self.conn.select(source_folder)
+        try:
+            typ, _ = self.conn.uid("MOVE", str(uid), target_folder)
+            if typ == "OK":
+                return True
+        except imaplib.IMAP4.error:
+            pass
+        # Fallback: COPY + STORE +FLAGS.SILENT \Deleted
+        typ, _ = self.conn.uid("COPY", str(uid), target_folder)
+        if typ != "OK":
+            return False
+        self.conn.uid("STORE", str(uid), "+FLAGS.SILENT", "(\\Deleted)")
+        self.conn.expunge()
+        return True
+
+    def delete_message(self, folder: str, uid: int) -> None:
+        """Mark a message as ``\\Deleted`` in an IMAP folder.
+
+        Args:
+            folder: Folder name
+            uid: IMAP UID of the message
+        """
+        self.conn.select(folder)
+        self.conn.uid("STORE", str(uid), "+FLAGS.SILENT", "(\\Deleted)")
+
+    def append_message(
+        self, folder: str, raw_message: bytes, flags: list[str] | None = None
+    ) -> bool:
+        """Append a raw message to an IMAP folder.
+
+        Args:
+            folder: Target folder name
+            raw_message: Raw RFC 5322 message bytes
+            flags: Optional IMAP flags (e.g. ``["\\Seen"]``)
+
+        Returns:
+            True if the append succeeded
+        """
+        flag_str = " ".join(flags) if flags else ""
+        try:
+            typ, _ = self.conn.append(folder, flag_str, None, raw_message)
+            return typ == "OK"
+        except imaplib.IMAP4.error:
+            return False
+
+    def fetch_raw_message(self, folder: str, uid: int) -> bytes | None:
+        """Fetch raw RFC 5322 message bytes by UID.
+
+        Args:
+            folder: Folder name
+            uid: IMAP UID of the message
+
+        Returns:
+            Raw message bytes or ``None`` if not found
+        """
+        self.conn.select(folder, readonly=True)
+        try:
+            typ, data = self.conn.uid(
+                "FETCH", str(uid), "(BODY[] UID)"
+            )
+            if typ != "OK" or not data or not isinstance(data[0], tuple):
+                return None
+            return data[0][1]
+        except imaplib.IMAP4.error:
+            return None
+
 
 __all__ = [
     "IMAPClient",
