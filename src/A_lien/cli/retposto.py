@@ -119,6 +119,14 @@ def retposto_preni(
             "UUID ou préfixe de compte spécifique",
         ),
     ),
+    force: bool = typer.Option(
+        False, "--deviga", "-d",
+        help=tr_multi(
+            "Deviga resinkronigo (re- elŝuti ĉiujn mesaĝojn)",
+            "Force re-sync (re-download all messages)",
+            "Resynchronisation forcée (retélécharger tous les messages)",
+        ),
+    ),
     debug_imap: bool = typer.Option(
         False, "--debug-imap",
         help=tr_multi(
@@ -132,6 +140,7 @@ def retposto_preni(
 
     By default syncs all accounts with passwords.
     Use --konto to sync a single account (by UUID or prefix).
+    Use --deviga to re-download all messages (not just new ones).
     """
     # Enable IMAP debug logging globally
     if debug_imap:
@@ -154,7 +163,7 @@ def retposto_preni(
             f"Récupération depuis {email}...",
         ))
         try:
-            result = svc.sync_account(acct["uuid"])
+            result = svc.sync_account(acct["uuid"], force=force)
             _report_sync(result, account_label=email)
         except ConnectionError as e:
             error(str(e))
@@ -185,7 +194,7 @@ def retposto_preni(
         f"Fetching from {len(sync_accts)} accounts...",
         f"Récupération de {len(sync_accts)} comptes...",
     ))
-    results = svc.sync_all()
+    results = svc.sync_all(force=force)
     for uid, result in results.items():
         email = email_map.get(uid, uid[:8])
         info(f"  {email}: ", nl=False)

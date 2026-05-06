@@ -191,6 +191,7 @@ class IMAPClient:
         konto_id: str,
         dosierujo_id: str,
         db_store: MessageStore,
+        force: bool = False,
     ) -> SyncResult:
         """Sync messages in a single folder, storing new ones.
 
@@ -202,6 +203,7 @@ class IMAPClient:
             konto_id: Account UUID
             dosierujo_id: Folder UUID in local DB
             db_store: Object with get_known_uids() and store_message()
+            force: If True, re-download all messages even if already synced
 
         Returns:
             SyncResult with counts
@@ -264,8 +266,10 @@ class IMAPClient:
 
             result.total = len(all_uids)
 
-            # Filter out already-synced UIDs
-            known_uids = db_store.get_known_uids(konto_id, dosierujo_id)
+            # Filter out already-synced UIDs (unless force refresh)
+            known_uids: set[int] = set()
+            if not force:
+                known_uids = db_store.get_known_uids(konto_id, dosierujo_id)
             new_uids = [uid for uid in all_uids if uid not in known_uids]
 
             if not new_uids:
@@ -313,14 +317,14 @@ class IMAPClient:
                             continue
                         imap_uid = int(uid_match.group(1))
 
-                        if imap_uid in known_uids:
+                        if not force and imap_uid in known_uids:
                             continue
 
                         msg = email_lib.message_from_bytes(raw_data)
 
                         self._store_message(
                             folder, msg, konto_id, dosierujo_id,
-                            imap_uid, db_store,
+                            imap_uid, db_store, force=force,
                         )
                         result.new += 1
 
@@ -343,6 +347,7 @@ class IMAPClient:
         dosierujo_id: str,
         imap_uid: int,
         db_store: MessageStore,
+        force: bool = False,
     ) -> str | None:
         """Parse a single email and store it via db_store."""
         now = datetime.now(timezone.utc).isoformat()
@@ -412,7 +417,7 @@ class IMAPClient:
             "modifita_je": now,
         }
 
-        stored_uuid = db_store.store_message(data)
+        stored_uuid = db_store.store_message(data, force=force)
         return stored_uuid
 
     # ── Message operations (move, delete, append) ────────────────────────────

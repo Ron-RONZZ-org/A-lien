@@ -15,6 +15,7 @@ def sync_account(
     konto_id: str,
     db_store: Any,
     folders: list[str] | None = None,
+    force: bool = False,
 ) -> SyncResult:
     """Sync all messages from an IMAP account.
 
@@ -27,6 +28,7 @@ def sync_account(
         konto_id: Account UUID for DB lookups
         db_store: Object with get_known_uids() and store_message()
         folders: Specific folders to sync (None = all)
+        force: If True, re-download all messages even if already synced
 
     Returns:
         Aggregated SyncResult
@@ -49,6 +51,7 @@ def sync_account(
                 pass
             fr = client.sync_folder(
                 folder_name, konto_id, dosierujo_id, db_store,
+                force=force,
             )
             result.total += fr.total
             result.new += fr.new
@@ -91,6 +94,7 @@ def sync_accounts_concurrent(
                 password=pw,
                 konto_id=uid,
                 db_store=db_store_m,
+                force=acct.get("force", False),
             )
             return uid, sr
         except Exception as e:

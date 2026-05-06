@@ -65,19 +65,32 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
         )
         return {r["imap_uid"] for r in rows}
 
-    def store_message(self, data: dict[str, Any]) -> str:
-        """Insert a message into mesagoj table.
+    def store_message(self, data: dict[str, Any], force: bool = False) -> str:
+        """Insert or update a message in mesagoj table.
 
-        Dedup is handled upstream by sync_folder() (UID filtering)
-        and the partial unique index on (konto_id, dosierujo_id, imap_uid).
+        When ``force=True`` and the message already exists (matched by IMAP UID),
+        the existing row is replaced with new data, preserving the original UUID.
 
         Args:
             data: Parsed message dict
+            force: If True, replace existing message with same IMAP UID
 
         Returns:
             Stored message UUID
         """
         msg_uuid = data.get("uuid") or str(uuid_mod.uuid4())
+
+        # When force-refreshing, delete the existing row first so INSERT works
+        if force:
+            imap_uid = data.get("imap_uid")
+            if imap_uid is not None:
+                existing = self.db.execute_one(
+                    "SELECT uuid FROM mesagoj WHERE konto_id = ? AND dosierujo_id = ? AND imap_uid = ?",
+                    (data["konto_id"], data["dosierujo_id"], imap_uid),
+                )
+                if existing:
+                    msg_uuid = existing["uuid"]
+                    self.db.execute("DELETE FROM mesagoj WHERE uuid = ?", (msg_uuid,))
         self.db.execute(
             """INSERT OR IGNORE INTO mesagoj
                (uuid, konto_id, dosierujo_id, message_id, in_reply_to,
@@ -237,11 +250,12 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             acct["password"] = pw
         return acct
 
-    def sync_account(self, uuid: str) -> Any:
+    def sync_account(self, uuid: str, force: bool = False) -> Any:
         """Sync messages for a single account, auto-creating contacts from senders.
 
         Args:
             uuid: Account UUID
+            force: If True, re-download all messages even if already synced
 
         Returns:
             SyncResult from imap module
@@ -260,6 +274,7 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             password=acct["password"],
             konto_id=uuid,
             db_store=self,
+            force=force,
         )
 
         # Auto-create contacts from senders of new, unseen messages
@@ -268,8 +283,11 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
 
         return result
 
-    def sync_all(self) -> dict[str, Any]:
+    def sync_all(self, force: bool = False) -> dict[str, Any]:
         """Sync messages for all accounts concurrently, auto-creating contacts.
+
+        Args:
+            force: If True, re-download all messages even if already synced
 
         Returns:
             Dict mapping account UUID -> SyncResult
@@ -283,11 +301,10 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             if pw:
                 acct["password"] = pw
                 acct["db_store"] = self
+                acct["force"] = force
                 enriched.append(acct)
 
         results = sync_accounts_concurrent(enriched)
-        # Note: _autosave_sync_contacts is already called by sync_account()
-        # inside sync_accounts_concurrent(). No need to call again here.
         return results
 
     def send_email(
