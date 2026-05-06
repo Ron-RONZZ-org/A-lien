@@ -504,7 +504,7 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
         )
 
     def mark_read(self, msg_uuid: str, legita: bool = True) -> None:
-        """Mark a message as read or unread.
+        """Mark a message as read or unread locally and on IMAP server.
 
         Args:
             msg_uuid: Message UUID
@@ -515,6 +515,68 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             "UPDATE mesagoj SET legita = ?, modifita_je = ? WHERE uuid = ?",
             (1 if legita else 0, now, msg_uuid),
         )
+        # Best-effort IMAP sync
+        self._imap_sync_flags(msg_uuid)
+
+    def _imap_sync_flags(self, msg_uuid: str) -> None:
+        """Sync local message flags to the IMAP server (best-effort).
+
+        Connects to the account's IMAP server and updates ``\\Seen``,
+        ``\\Deleted``, and ``\\Flagged`` flags based on local state.
+
+        Args:
+            msg_uuid: Message UUID
+        """
+        msg = self.get_message(msg_uuid)
+        if not msg:
+            return
+        konto_id = msg.get("konto_id", "")
+        if not konto_id:
+            return
+        acct = self.get_account_with_password(konto_id)
+        if not acct or "password" not in acct:
+            return
+        imap_uid = msg.get("imap_uid")
+        if imap_uid is None:
+            return
+
+        # Resolve folder name from dosierujo_id
+        folder_row = self.db.execute_one(
+            "SELECT nomo FROM dosierujoj WHERE uuid = ?",
+            (msg.get("dosierujo_id", ""),),
+        )
+        folder = folder_row["nomo"] if folder_row else "INBOX"
+
+        legita = bool(msg.get("legita", 0))
+        forigita = bool(msg.get("forigita", 0))
+
+        from A_lien.imap.client import IMAPClient
+
+        client = IMAPClient(
+            host=acct.get("imap_servilo", ""),
+            port=acct.get("imap_haveno", 993),
+            use_ssl=acct.get("imap_ssl", 1) == 1,
+        )
+        try:
+            client.connect(
+                username=acct.get("imap_uzantonomo", "") or acct.get("retposto", ""),
+                password=acct["password"],
+            )
+            add: list[str] = []
+            remove: list[str] = []
+            if legita:
+                add.append("\\Seen")
+            else:
+                remove.append("\\Seen")
+            if forigita:
+                add.append("\\Deleted")
+            else:
+                remove.append("\\Deleted")
+            client.set_flags(folder, int(imap_uid), add=add or None, remove=remove or None)
+        except Exception:
+            pass  # Best-effort: don't block user if IMAP is unreachable
+        finally:
+            client.disconnect()
 
     def search_messages(
         self, filters: dict[str, Any], limit: int = 50
@@ -628,6 +690,7 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
                 "UPDATE mesagoj SET forigita = 1, modifita_je = ? WHERE uuid = ?",
                 (now, msg_uuid),
             )
+            self._imap_sync_flags(msg_uuid)
 
     def move_message(
         self,

@@ -460,6 +460,27 @@ class IMAPClient:
         self.conn.select(folder)
         self.conn.uid("STORE", str(uid), "+FLAGS.SILENT", "(\\Deleted)")
 
+    def set_flags(
+        self, folder: str, uid: int,
+        add: list[str] | None = None,
+        remove: list[str] | None = None,
+    ) -> None:
+        """Add or remove IMAP flags on a message.
+
+        Args:
+            folder: Folder name
+            uid: IMAP UID of the message
+            add: Flags to add (e.g. ``["\\Seen", "\\Flagged"]``)
+            remove: Flags to remove (e.g. ``["\\Deleted"]``)
+        """
+        self.conn.select(folder)
+        if add:
+            flag_str = " ".join(add)
+            self.conn.uid("STORE", str(uid), "+FLAGS.SILENT", f"({flag_str})")
+        if remove:
+            flag_str = " ".join(remove)
+            self.conn.uid("STORE", str(uid), "-FLAGS.SILENT", f"({flag_str})")
+
     def append_message(
         self, folder: str, raw_message: bytes, flags: list[str] | None = None
     ) -> bool:
