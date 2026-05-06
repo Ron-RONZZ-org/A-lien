@@ -297,6 +297,12 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             force=force,
         )
 
+        # Process pending flag sync backlog
+        backlog_count = self.process_sync_backlog()
+        if backlog_count > 0:
+            from A import info as _info
+            _info(f"  Sinkronigitaj {backlog_count} flagoj al servilo")
+
         # Auto-create contacts from senders of new, unseen messages
         if result.new > 0:
             self._autosave_sync_contacts(uuid)
@@ -519,10 +525,11 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
         self._imap_sync_flags(msg_uuid)
 
     def _imap_sync_flags(self, msg_uuid: str) -> None:
-        """Sync local message flags to the IMAP server (best-effort).
+        """Sync local message flags to the IMAP server, queuing on failure.
 
-        Connects to the account's IMAP server and updates ``\\Seen``,
-        ``\\Deleted``, and ``\\Flagged`` flags based on local state.
+        Attempts an immediate IMAP connection. If it fails, the sync
+        request is enqueued in the backlog for later processing
+        (e.g. during the next ``preni``).
 
         Args:
             msg_uuid: Message UUID
@@ -535,12 +542,13 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
             return
         acct = self.get_account_with_password(konto_id)
         if not acct or "password" not in acct:
+            self._enqueue_sync(msg)
             return
         imap_uid = msg.get("imap_uid")
         if imap_uid is None:
+            self._enqueue_sync(msg)
             return
 
-        # Resolve folder name from dosierujo_id
         folder_row = self.db.execute_one(
             "SELECT nomo FROM dosierujoj WHERE uuid = ?",
             (msg.get("dosierujo_id", ""),),
@@ -574,9 +582,118 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
                 remove.append("\\Deleted")
             client.set_flags(folder, int(imap_uid), add=add or None, remove=remove or None)
         except Exception:
-            pass  # Best-effort: don't block user if IMAP is unreachable
+            self._enqueue_sync(msg)
         finally:
             client.disconnect()
+
+    def _enqueue_sync(self, msg: dict) -> None:
+        """Queue a message flag sync request for later processing.
+
+        Inserts or updates the backlog entry for this message so the
+        IMAP flag changes are applied on the next connection attempt.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        msg_uuid = msg["uuid"]
+        self.db.execute(
+            "INSERT OR REPLACE INTO _sync_backlog "
+            "(id, msg_uuid, konto_id, dosierujo_id, imap_uid, "
+            " legita, forigita, stelo, spamo, kreita_je, last_attempt, provis) "
+            "VALUES ("
+            "  COALESCE((SELECT id FROM _sync_backlog WHERE msg_uuid = ?), NULL),"
+            "  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0"
+            ")",
+            (
+                msg_uuid,
+                msg_uuid,
+                msg.get("konto_id", ""),
+                msg.get("dosierujo_id", ""),
+                msg.get("imap_uid"),
+                int(msg.get("legita", 0)),
+                int(msg.get("forigita", 0)),
+                int(msg.get("stelo", 0)),
+                int(msg.get("spamo", 0)),
+                now,
+                None,
+            ),
+        )
+
+    def process_sync_backlog(self) -> int:
+        """Process all pending flag sync requests.
+
+        Attempts IMAP connections per account and applies queued
+        flag changes. Failed entries are retried on the next call.
+
+        Returns:
+            Number of successfully synced entries
+        """
+        entries = list(self.db.execute(
+            "SELECT * FROM _sync_backlog ORDER BY kreita_je ASC LIMIT 500"
+        ))
+        if not entries:
+            return 0
+
+        # Group by account for efficient connection reuse
+        from collections import defaultdict
+        by_account: dict[str, list[dict]] = defaultdict(list)
+        for e in entries:
+            by_account[e["konto_id"]].append(e)
+
+        synced = 0
+        for konto_id, items in by_account.items():
+            acct = self.get_account_with_password(konto_id)
+            if not acct or "password" not in acct:
+                continue
+            from A_lien.imap.client import IMAPClient
+            client = IMAPClient(
+                host=acct.get("imap_servilo", ""),
+                port=acct.get("imap_haveno", 993),
+                use_ssl=acct.get("imap_ssl", 1) == 1,
+            )
+            try:
+                client.connect(
+                    username=acct.get("imap_uzantonomo", "") or acct.get("retposto", ""),
+                    password=acct["password"],
+                )
+                for item in items:
+                    try:
+                        imap_uid = item["imap_uid"]
+                        if imap_uid is None:
+                            continue
+                        row = self.db.execute_one(
+                            "SELECT nomo FROM dosierujoj WHERE uuid = ?",
+                            (item.get("dosierujo_id", ""),),
+                        )
+                        folder = row["nomo"] if row else "INBOX"
+                        add: list[str] = []
+                        remove: list[str] = []
+                        if item.get("legita"):
+                            add.append("\\Seen")
+                        else:
+                            remove.append("\\Seen")
+                        if item.get("forigita"):
+                            add.append("\\Deleted")
+                        else:
+                            remove.append("\\Deleted")
+                        client.set_flags(
+                            folder, int(imap_uid),
+                            add=add or None, remove=remove or None,
+                        )
+                        self.db.execute(
+                            "DELETE FROM _sync_backlog WHERE id = ?",
+                            (item["id"],),
+                        )
+                        synced += 1
+                    except Exception:
+                        self.db.execute(
+                            "UPDATE _sync_backlog SET provis = provis + 1, "
+                            "last_attempt = ? WHERE id = ?",
+                            (datetime.now(timezone.utc).isoformat(), item["id"]),
+                        )
+            except Exception:
+                pass  # Whole account failed — entries retry next time
+            finally:
+                client.disconnect()
+        return synced
 
     def search_messages(
         self, filters: dict[str, Any], limit: int = 50

@@ -231,6 +231,28 @@ CREATE TABLE IF NOT EXISTS _schema_version (
 );
 """
 
+# ── Sync backlog (pending IMAP flag updates) ────────────────────────────────
+
+_CREATE_SYNC_BACKLOG = """
+CREATE TABLE IF NOT EXISTS _sync_backlog (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    msg_uuid    TEXT NOT NULL,
+    konto_id    TEXT NOT NULL,
+    dosierujo_id TEXT,
+    imap_uid    INTEGER,
+    legita      INTEGER,
+    forigita    INTEGER,
+    stelo       INTEGER,
+    spamo       INTEGER,
+    kreita_je   TEXT NOT NULL,
+    last_attempt TEXT,
+    provis      INTEGER NOT NULL DEFAULT 0
+);
+"""
+_IDX_SYNC_BACKLOG_MSG = """
+CREATE INDEX IF NOT EXISTS idx_sync_backlog_msg ON _sync_backlog(msg_uuid);
+"""
+
 # ── All DDL statements in creation order ─────────────────────────────────────
 
 _SCHEMA_STATEMENTS: list[str] = [
@@ -245,6 +267,7 @@ _SCHEMA_STATEMENTS: list[str] = [
     _CREATE_KONTAKTOJ,
     _CREATE_KATEGORIOJ,
     _CREATE_SCHEMA_VERSION,
+    _CREATE_SYNC_BACKLOG,
     # Indexes (must come after tables)
     _IDX_DOSIERUJOJ_KONTO,
     _IDX_MESAGXOJ_KONTO,
@@ -256,6 +279,7 @@ _SCHEMA_STATEMENTS: list[str] = [
     _IDX_ALDONAJXOJ_MESAGXO,
     _IDX_KONTAKTOJ_NOMO,
     _IDX_KONTAKTOJ_RETPOSTO,
+    _IDX_SYNC_BACKLOG_MSG,
 ]
 
 # ── FTS5 configuration for contacts ──────────────────────────────────────────

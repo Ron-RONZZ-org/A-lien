@@ -93,17 +93,28 @@ _MIGRATIONS: list[tuple[int, str, list[MigrationStep]]] = [
         "Delete stale rows with imap_uid=NULL to prevent first-sync duplicates",
         ["DELETE FROM mesagoj WHERE imap_uid IS NULL AND dosierujo_id != ''"],
     ),
+    (
+        5,
+        "Create _sync_backlog table for queued IMAP flag syncs",
+        [
+            "CREATE TABLE IF NOT EXISTS _sync_backlog ("
+            "  id          INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "  msg_uuid    TEXT NOT NULL,"
+            "  konto_id    TEXT NOT NULL,"
+            "  dosierujo_id TEXT,"
+            "  imap_uid    INTEGER,"
+            "  legita      INTEGER,"
+            "  forigita    INTEGER,"
+            "  stelo       INTEGER,"
+            "  spamo       INTEGER,"
+            "  kreita_je   TEXT NOT NULL,"
+            "  last_attempt TEXT,"
+            "  provis      INTEGER NOT NULL DEFAULT 0"
+            ")",
+            "CREATE INDEX IF NOT EXISTS idx_sync_backlog_msg ON _sync_backlog(msg_uuid)",
+        ],
+    ),
 ]
-
-
-def _rename_mesagxoj_to_mesagoj(conn: Any) -> None:
-    """Rename mesagxoj -> mesagoj if the old table exists."""
-    row = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='mesagxoj'"
-    ).fetchone()
-    if row:
-        conn.execute("DROP TABLE IF EXISTS mesagoj")
-        conn.execute("ALTER TABLE mesagxoj RENAME TO mesagoj")
 
 
 def get_schema_version(db: SQLiteDB) -> int:
