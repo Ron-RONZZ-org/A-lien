@@ -166,24 +166,44 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
     def delete_accounts(self, uuids: list[str]) -> list[dict[str, object | str]]:
         """Bulk-delete accounts, returning per-UUID results.
 
+        Resolves short UUID prefixes to full UUIDs before deletion.
         Each result dict has:
-        - ``uuid``: the account UUID (truncated to 8 chars)
+        - ``uuid``: the original UUID input (truncated to 8 chars)
         - ``success``: whether deletion succeeded
         - ``error``: error message if failed, else ``None``
 
         Args:
-            uuids: List of account UUIDs to delete
+            uuids: List of account UUIDs (full or short prefix) to delete
 
         Returns:
             List of result dicts, one per UUID
         """
-        import traceback
-
         results: list[dict[str, object | str]] = []
         for uid in uuids:
             try:
-                self.delete(uid, soft=True)
-                self.delete_password(uid)
+                # Resolve short UUID to full UUID
+                account = self.get_account(uid)
+                if not account:
+                    matches = self.find_by_uuid_prefix(uid)
+                    if len(matches) == 1:
+                        account = matches[0]
+                    elif len(matches) > 1:
+                        results.append({
+                            "uuid": uid,
+                            "success": False,
+                            "error": f"UUID '{uid[:8]}' matches multiple accounts",
+                        })
+                        continue
+                    else:
+                        results.append({
+                            "uuid": uid,
+                            "success": False,
+                            "error": f"Account not found: {uid[:8]}",
+                        })
+                        continue
+                full_uuid = account["uuid"]
+                self.delete(full_uuid, soft=True)
+                self.delete_password(full_uuid)
                 results.append({"uuid": uid, "success": True, "error": None})
             except Exception as e:
                 results.append({
