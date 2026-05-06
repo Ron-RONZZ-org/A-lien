@@ -103,7 +103,7 @@ def _report_sync(result: Any, account_label: str = "") -> None:
         ))
     info(f"{prefix}{', '.join(parts)}")
     for err in result.errors[:3]:
-        warning(f"  {prefix}{err}")
+        error(f"  {prefix}{err}")
 
 
 # ── Mail operations ──────────────────────────────────────────────────────────
