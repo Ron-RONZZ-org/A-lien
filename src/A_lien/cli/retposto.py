@@ -299,16 +299,30 @@ def retposto_vidi_mesago(
         ..., help=tr_multi("Mesaĝo UUID", "Message UUID", "UUID message")
     ),
     html: bool = typer.Option(
-        False, "--html",
-        help=tr_multi("Montri HTML", "Show HTML", "Afficher HTML"),
+        False, "--html", "-H",
+        help=tr_multi("Montri HTML en retumilo", "Show HTML in browser", "Afficher HTML dans le navigateur"),
     ),
 ) -> None:
-    """View a email by UUID or prefix (opens in editor by default)."""
+    """View an email by UUID or prefix (opens in editor by default)."""
     svc = get_retposto_service()
     msg = _resolve_message(svc, uuid)
 
     # Mark as read
     svc.mark_read(msg["uuid"])
+
+    if html:
+        html_body = msg.get("html_korpo", "") or msg.get("korpo", "")
+        if html_body:
+            from A.core.markdown_html_view import preview_html
+
+            preview_html(html_body, open_browser=True)
+        else:
+            error(tr_multi(
+                "Neniu HTML-enhavo por ĉi tiu mesaĝo.",
+                "No HTML content for this message.",
+                "Aucun contenu HTML pour ce message.",
+            ))
+        return
 
     # Build email text
     lines = [
