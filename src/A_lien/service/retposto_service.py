@@ -69,7 +69,8 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
         """Insert or update a message in mesagoj table.
 
         When ``force=True`` and the message already exists (matched by IMAP UID),
-        the existing row is replaced with new data, preserving the original UUID.
+        the existing row is replaced with new data, preserving the original UUID
+        and local-only state (read/unread, deleted/starred flag).
 
         Args:
             data: Parsed message dict
@@ -81,15 +82,25 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
         msg_uuid = data.get("uuid") or str(uuid_mod.uuid4())
 
         # When force-refreshing, delete the existing row first so INSERT works
+        # Preserve local-only state before deletion.
+        local_legita = None
+        local_stelo = None
+        local_spamo = None
+        local_forigita = None
         if force:
             imap_uid = data.get("imap_uid")
             if imap_uid is not None:
                 existing = self.db.execute_one(
-                    "SELECT uuid FROM mesagoj WHERE konto_id = ? AND dosierujo_id = ? AND imap_uid = ?",
+                    "SELECT uuid, legita, stelo, spamo, forigita FROM mesagoj "
+                    "WHERE konto_id = ? AND dosierujo_id = ? AND imap_uid = ?",
                     (data["konto_id"], data["dosierujo_id"], imap_uid),
                 )
                 if existing:
                     msg_uuid = existing["uuid"]
+                    local_legita = existing["legita"]
+                    local_stelo = existing["stelo"]
+                    local_spamo = existing["spamo"]
+                    local_forigita = existing["forigita"]
                     self.db.execute("DELETE FROM mesagoj WHERE uuid = ?", (msg_uuid,))
         self.db.execute(
             """INSERT OR IGNORE INTO mesagoj
@@ -127,6 +138,15 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
                 data.get("modifita_je", ""),
             ),
         )
+
+        # Restore local-only state that was preserved before deletion
+        if force and local_legita is not None:
+            self.db.execute(
+                "UPDATE mesagoj SET legita = ?, stelo = ?, spamo = ?, forigita = ? "
+                "WHERE uuid = ?",
+                (local_legita, local_stelo, local_spamo, local_forigita, msg_uuid),
+            )
+
         return msg_uuid
 
     # ── Auto-contact helpers — provided by RetpostoContactMixin ─────────────
