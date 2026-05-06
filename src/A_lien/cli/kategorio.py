@@ -6,6 +6,8 @@ Registered on kontakto typer from kontakto.py.
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import typer
 
 from A import error, info, tr_multi
@@ -71,26 +73,26 @@ def kategorio_aldoni(
 
 @kategorio_app.command("forigi")
 def kategorio_forigi(
-    uuid: str = typer.Argument(
+    uuids: Annotated[list[str], typer.Argument(
         ...,
-        help=tr_multi("Kategorio UUID", "Category UUID", "UUID catégorie"),
-    ),
+        help=tr_multi("Kategorio UUID (pluraj)", "Category UUIDs (multiple)", "UUIDs catégorie (plusieurs)"),
+    )],
 ) -> None:
-    """Delete a category."""
+    """Delete categories."""
     service = get_kontakto_service()
-    if service.delete_category(uuid):
-        info(tr_multi(
-            f"Kategorio forigita: {uuid[:8]}",
-            f"Category deleted: {uuid[:8]}",
-            f"Catégorie supprimée: {uuid[:8]}",
-        ))
-    else:
-        error(tr_multi(
-            f"Kategorio ne trovita: {uuid}",
-            f"Category not found: {uuid}",
-            f"Catégorie non trouvée: {uuid}",
-        ))
-        raise typer.Exit(1)
+    for uid in uuids:
+        if service.delete_category(uid):
+            info(tr_multi(
+                f"Kategorio forigita: {uid[:8]}",
+                f"Category deleted: {uid[:8]}",
+                f"Catégorie supprimée: {uid[:8]}",
+            ))
+        else:
+            error(tr_multi(
+                f"Kategorio ne trovita: {uid[:8]}",
+                f"Category not found: {uid[:8]}",
+                f"Catégorie non trouvée: {uid[:8]}",
+            ))
 
 
 __all__ = [

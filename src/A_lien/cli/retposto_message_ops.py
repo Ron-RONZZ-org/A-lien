@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
-from typing import Optional
+from typing import Annotated, Optional
 
 import typer
 
@@ -252,13 +252,13 @@ def _edit_or_body(
 
 
 def retposto_forigi(
-    uuid: str = typer.Argument(
+    uuids: Annotated[list[str], typer.Argument(
         ..., help=tr_multi(
-            "Mesaĝo UUID",
-            "Message UUID",
-            "UUID du message",
+            "Mesaĝo UUID (pluraj)",
+            "Message UUIDs (multiple)",
+            "UUIDs des messages (plusieurs)",
         ),
-    ),
+    )],
     permanente: bool = typer.Option(
         False, "--permanente",
         help=tr_multi(
@@ -268,24 +268,35 @@ def retposto_forigi(
         ),
     ),
 ) -> None:
-    """Delete/move message to trash."""
+    """Delete/move messages to trash."""
     svc = get_retposto_service()
-    msg = _resolve_message(svc, uuid)
-    if not msg:
-        error(tr_multi(
-            f"Mesaĝo ne trovita: {uuid}",
-            f"Message not found: {uuid}",
-            f"Message non trouvé: {uuid}",
-        ))
+    successes = 0
+    errors = 0
+    for uid in uuids:
+        msg = _resolve_message(svc, uid)
+        if not msg:
+            error(tr_multi(
+                f"Mesaĝo ne trovita: {uid[:8]}",
+                f"Message not found: {uid[:8]}",
+                f"Message non trouvé: {uid[:8]}",
+            ))
+            errors += 1
+            continue
+        try:
+            svc.trash_message(msg["uuid"], permanent=permanente)
+            successes += 1
+        except Exception as e:
+            error(tr_multi(
+                f"Eraro: {uid[:8]} — {e}",
+                f"Error: {uid[:8]} — {e}",
+                f"Erreur: {uid[:8]} — {e}",
+            ))
+            errors += 1
+    if successes:
+        label = tr_multi("forigitaj", "deleted", "supprimés")
+        info(f"{successes} mesaĝo(j) {label}")
+    if errors:
         raise typer.Exit(1)
-
-    svc.trash_message(msg["uuid"], permanent=permanente)
-    label = tr_multi("forigita", "deleted", "supprimé")
-    info(tr_multi(
-        f"Mesaĝo {label}: {msg['uuid'][:8]}",
-        f"Message {label}: {msg['uuid'][:8]}",
-        f"Message {label}: {msg['uuid'][:8]}",
-    ))
 
 
 # ── movi — move message to another account/folder ────────────────────────────

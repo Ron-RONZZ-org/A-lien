@@ -5,6 +5,8 @@ Commands: ls, aldoni, forigi, sinkronigi
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import typer
 
 from A import error, info, warning, tr_multi
@@ -128,14 +130,14 @@ def spamo_aldoni(
 
 @spamo_app.command("forigi")
 def spamo_forigi(
-    uuid: str = typer.Argument(
+    uuids: Annotated[list[str], typer.Argument(
         ...,
         help=tr_multi(
-            "Bloka UUID",
-            "Block UUID",
-            "UUID du bloc",
+            "Bloka UUID (pluraj)",
+            "Block UUIDs (multiple)",
+            "UUIDs du bloc (plusieurs)",
         ),
-    ),
+    )],
     account: str = typer.Option(
         "", "--account", "-a",
         help=tr_multi(
@@ -145,23 +147,30 @@ def spamo_forigi(
         ),
     ),
 ) -> None:
-    """Remove a spam block by UUID.
-
+    """Remove spam block rules by UUID.
     Use --account to also sync the updated ruleset to the account's
     ManageSieve server.
     """
     svc = get_retposto_service()
-    try:
-        svc.remove_spam_block(uuid)
-    except Exception as e:
-        error(str(e))
+    successes = 0
+    for uid in uuids:
+        try:
+            svc.remove_spam_block(uid)
+            successes += 1
+        except Exception as e:
+            error(tr_multi(
+                f"Eraro: {uid[:8]} — {e}",
+                f"Error: {uid[:8]} — {e}",
+                f"Erreur: {uid[:8]} — {e}",
+            ))
+    if successes:
+        info(tr_multi(
+            f"{successes} bloko(j) forigitaj",
+            f"{successes} block(s) removed",
+            f"{successes} bloc(s) supprimé(s)",
+        ))
+    if not successes:
         raise typer.Exit(1)
-
-    info(tr_multi(
-        "Spama bloko forigita.",
-        "Spam block removed.",
-        "Bloc de spam supprimé.",
-    ))
 
     if account:
         _sync_and_report(svc, account)

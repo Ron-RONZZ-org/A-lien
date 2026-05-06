@@ -5,7 +5,7 @@ Commands registered on kontakto typer: aldoni, modifi, forigi, importi, eksporti
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 import typer
 
@@ -280,30 +280,38 @@ def kontakto_modifi(
 
 
 def kontakto_forigi(
-    uuid: str = typer.Argument(
-        ..., help=tr_multi("Kontakto UUID", "Contact UUID", "UUID contact")
-    ),
+    uuids: Annotated[list[str], typer.Argument(
+        ..., help=tr_multi(
+            "Kontakto UUID (pluraj)",
+            "Contact UUIDs (multiple)",
+            "UUIDs des contacts (plusieurs)",
+        ),
+    )],
     permanent: bool = typer.Option(
         False, "--permanent", "-P",
         help=tr_multi("Definitiva forigo", "Permanent delete", "Suppression permanente"),
     ),
 ) -> None:
-    """Delete a contact (soft-delete by default)."""
+    """Delete contacts (soft-delete by default)."""
     service = get_kontakto_service()
-
-    try:
-        service.delete(uuid, soft=not permanent)
+    successes = 0
+    for uid in uuids:
+        try:
+            service.delete(uid, soft=not permanent)
+            successes += 1
+        except Exception as e:
+            error(tr_multi(
+                f"Eraro dum forigo de {uid[:8]}: {e}",
+                f"Error deleting {uid[:8]}: {e}",
+                f"Erreur lors de la suppression de {uid[:8]}: {e}",
+            ))
+    if successes:
         info(tr_multi(
-            f"Kontakto forigita: {uuid[:8]}",
-            f"Contact deleted: {uuid[:8]}",
-            f"Contact supprimé: {uuid[:8]}",
+            f"{successes} kontakto(j) forigitaj",
+            f"{successes} contact(s) deleted",
+            f"{successes} contact(s) supprimé(s)",
         ))
-    except Exception as e:
-        error(tr_multi(
-            f"Eraro dum forigo: {e}",
-            f"Error deleting: {e}",
-            f"Erreur lors de la suppression: {e}",
-        ))
+    else:
         raise typer.Exit(1)
 
 

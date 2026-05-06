@@ -5,6 +5,8 @@ Commands: ls, aldoni, forigi
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import typer
 
 from A import error, info, tr_multi
@@ -83,26 +85,26 @@ def subskribo_aldoni(
 
 @subskribo_app.command("forigi")
 def subskribo_forigi(
-    uuid: str = typer.Argument(
-        ..., help=tr_multi("Subskribo UUID", "Signature UUID", "UUID signature")
-    ),
+    uuids: Annotated[list[str], typer.Argument(
+        ..., help=tr_multi("Subskribo UUID (pluraj)", "Signature UUIDs (multiple)", "UUIDs signature (plusieurs)")
+    )],
 ) -> None:
-    """Delete a signature."""
+    """Delete signatures."""
     service = get_retposto_service()
-    try:
-        service.delete_signature(uuid)
-        info(tr_multi(
-            f"Subskribo forigita: {uuid[:8]}",
-            f"Signature deleted: {uuid[:8]}",
-            f"Signature supprimée: {uuid[:8]}",
-        ))
-    except Exception as e:
-        error(tr_multi(
-            f"Eraro: {e}",
-            f"Error: {e}",
-            f"Erreur: {e}",
-        ))
-        raise typer.Exit(1)
+    for uid in uuids:
+        try:
+            service.delete_signature(uid)
+            info(tr_multi(
+                f"Subskribo forigita: {uid[:8]}",
+                f"Signature deleted: {uid[:8]}",
+                f"Signature supprimée: {uid[:8]}",
+            ))
+        except Exception as e:
+            error(tr_multi(
+                f"Eraro: {uid[:8]} — {e}",
+                f"Error: {uid[:8]} — {e}",
+                f"Erreur: {uid[:8]} — {e}",
+            ))
 
 
 __all__ = [
