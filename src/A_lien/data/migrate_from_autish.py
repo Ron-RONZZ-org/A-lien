@@ -192,7 +192,7 @@ def _migrate_accounts(legacy: sqlite3.Connection, target: _SQLiteDB, results: di
                 import keyring
                 account_id = row["id"]
                 password = keyring.get_password("autish-retposto", str(account_id))
-            except Exception:
+            except Exception:  # noqa: S110 — keyring unavailable, skip migration
                 pass
             
             if password:
@@ -201,7 +201,7 @@ def _migrate_accounts(legacy: sqlite3.Connection, target: _SQLiteDB, results: di
                 try:
                     import keyring
                     keyring.delete_password("autish-retposto", str(account_id))
-                except Exception:
+                except Exception:  # noqa: S110 — keyring cleanup, non-fatal
                     pass
             
             results["accounts"]["migrated_rows"] += 1

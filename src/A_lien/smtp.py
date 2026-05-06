@@ -81,7 +81,7 @@ class SMTPClient:
         if self._conn:
             try:
                 self._conn.quit()
-            except Exception:
+            except Exception:  # noqa: S110 — cleanup, ignore errors
                 pass
             self._conn = None
 

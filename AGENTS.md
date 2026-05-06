@@ -77,6 +77,22 @@ src/A_lien/
 
 All tables in `lien.db` at `A.core.paths.data_dir()`. WAL mode via `A.data.base.SQLiteDB`.
 
+### DDL vs. Migration Contract
+
+**DDL creates, migration alters.** This separation is critical:
+
+| Concern | Responsibility | Location |
+|---------|---------------|----------|
+| Table creation | `CREATE TABLE IF NOT EXISTS` | `storage.py` (_SCHEMA_STATEMENTS) |
+| Column changes | `ALTER TABLE` via `migrate()` | `migrate.py` (_MIGRATIONS) |
+| Index creation | Both | `storage.py` for fresh DBs, `migrate.py` for legacy upgrades |
+
+Rules:
+1. **`CREATE TABLE IF NOT EXISTS` does NOT add columns.** Never rely on DDL replay to alter an existing table. Schema changes must go through migrations.
+2. **`get_db()` must call `migrate()`.** See the bug history in issue #31 — A-lien forgot this, causing `no such column: imap_uid`.
+3. **Indexes referencing new columns must NOT be in `_SCHEMA_STATEMENTS`.** They go in the migration step that adds the column, since the DDL loop runs before migrations and would fail on legacy DBs.
+4. **Guard all migration steps.** Use `pragma_table_info()` to check column existence before `ALTER TABLE ADD/DROP COLUMN`. Fresh DBs already have the latest schema and don't need column migrations.
+
 ### Tables
 
 | Table | Description | CRUDService | FTS5 |
