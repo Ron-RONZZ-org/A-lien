@@ -371,19 +371,28 @@ class IMAPClient:
 
         body = ""
         html_body = ""
+        attachments: list[dict[str, Any]] = []
         if msg.is_multipart():
             for part in msg.walk():
                 content_type = part.get_content_type()
-                if content_type == "text/plain" and not body:
+                filename = part.get_filename()
+                if content_type == "text/plain" and not body and not filename:
                     payload = part.get_payload(decode=True)
                     if payload:
                         charset = part.get_content_charset() or "utf-8"
                         body = payload.decode(charset, errors="replace")
-                elif content_type == "text/html" and not html_body:
+                elif content_type == "text/html" and not html_body and not filename:
                     payload = part.get_payload(decode=True)
                     if payload:
                         charset = part.get_content_charset() or "utf-8"
                         html_body = payload.decode(charset, errors="replace")
+                elif filename:
+                    payload = part.get_payload(decode=True)
+                    attachments.append({
+                        "dosiernomo": filename,
+                        "mime_tipo": content_type,
+                        "grandeco": len(payload) if payload else 0,
+                    })
         else:
             payload = msg.get_payload(decode=True)
             if payload:
@@ -410,7 +419,7 @@ class IMAPClient:
             "stelo": 0,
             "spamo": 0,
             "forigita": 0,
-            "aldonajxoj": "[]",
+            "aldonajxoj": json.dumps(attachments, ensure_ascii=False),
             "etikedoj": "[]",
             "ricevita_je": ricevita_je,
             "kreita_je": now,
