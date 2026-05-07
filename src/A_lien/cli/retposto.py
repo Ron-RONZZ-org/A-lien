@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from typing import Any
 
@@ -302,6 +303,50 @@ def retposto_sendi(
         raise typer.Exit(1)
 
 
+def _format_size(size: int) -> str:
+    """Format byte count to human-readable string."""
+    if size > 1024 * 1024:
+        return f"{size / (1024 * 1024):.1f} MB"
+    if size > 1024:
+        return f"{size / 1024:.1f} KB"
+    return f"{size} B"
+
+
+def _build_attachments_html(attachments: list[dict]) -> str:
+    """Build an HTML attachment block suitable for appending to email body HTML.
+
+    Args:
+        attachments: List of attachment dicts with keys: dosiernomo, mime_tipo, grandeco, vojo
+
+    Returns:
+        HTML string with attachment list, or empty string if no attachments
+    """
+    if not attachments:
+        return ""
+    rows: list[str] = []
+    for att in attachments:
+        size = att.get("grandeco", 0)
+        size_str = _format_size(size)
+        mime = att.get("mime_tipo", "")
+        fname = html.escape(att.get("dosiernomo", ""))
+        vojo = att.get("vojo", "")
+        if vojo:
+            rows.append(
+                f'<li><a href="file://{vojo}">{fname}</a>'
+                f" ({size_str}) <code>{html.escape(mime)}</code></li>"
+            )
+        else:
+            rows.append(
+                f"<li>{fname} ({size_str}) <code>{html.escape(mime)}</code></li>"
+            )
+    return (
+        '<div class="attachments">\n'
+        f"<h3>{tr_multi('Aldonaĵoj:', 'Attachments:', 'Pièces jointes:')}</h3>\n"
+        f"<ul>\n{chr(10).join(rows)}\n</ul>\n"
+        "</div>\n"
+    )
+
+
 @retposto.command("vidi")
 def retposto_vidi_mesago(
     uuid: str = typer.Argument(
@@ -322,6 +367,10 @@ def retposto_vidi_mesago(
     if html:
         html_body = msg.get("html_korpo", "") or msg.get("korpo", "")
         if html_body:
+            # Append attachment links to HTML body
+            attachments = svc.get_attachments(msg["uuid"])
+            if attachments:
+                html_body += _build_attachments_html(attachments)
             from A.core.markdown_html_view import preview_html
 
             preview_html(
@@ -360,10 +409,12 @@ def retposto_vidi_mesago(
         lines.append("")
         lines.append("-" * 40)
         lines.append(tr_multi("Aldonaĵoj:", "Attachments:", "Pièces jointes:"))
-        for att in attachments:
+        for idx, att in enumerate(attachments, 1):
             size = att.get("grandeco", 0)
-            size_str = f"{size / 1024:.1f} KB" if size > 1024 else f"{size} B"
-            lines.append(f"  {att['dosiernomo']} ({size_str}) [{att.get('mime_tipo', '?')}]")
+            size_str = _format_size(size)
+            mime = att.get("mime_tipo", "?")
+            fname = att.get("dosiernomo", "?")
+            lines.append(f"  [{idx}] {fname} ({size_str}) [{mime}]")
 
     email_text = "\n".join(lines)
 
