@@ -374,35 +374,38 @@ class IMAPClient:
         attachments: list[dict[str, Any]] = []
         if msg.is_multipart():
             for part in msg.walk():
-                content_type = part.get_content_type()
+                ct = part.get_content_type()
+                disp = str(part.get("Content-Disposition") or "")
                 filename = part.get_filename()
-                if content_type == "text/plain" and not body and not filename:
-                    payload = part.get_payload(decode=True)
-                    if payload:
-                        charset = part.get_content_charset() or "utf-8"
-                        body = payload.decode(charset, errors="replace")
-                elif content_type == "text/html" and not html_body and not filename:
-                    payload = part.get_payload(decode=True)
-                    if payload:
-                        charset = part.get_content_charset() or "utf-8"
-                        html_body = payload.decode(charset, errors="replace")
-                elif filename:
+                # Detect attachments via Content-Disposition header (matching autish-legacy)
+                if "attachment" in disp or filename:
+                    fname = filename or "attachment"
                     payload = part.get_payload(decode=True)
                     attachments.append({
-                        "dosiernomo": filename,
-                        "mime_tipo": content_type,
+                        "dosiernomo": fname,
+                        "mime_tipo": ct,
                         "grandeco": len(payload) if payload else 0,
                     })
-                # Also catch parts with Content-Type name= param (no Content-Disposition)
-                elif content_type not in ("text/plain", "text/html") and not part.is_multipart():
+                # Calendar invites and other non-text MIME parts
+                elif ct not in ("text/plain", "text/html") and not part.is_multipart():
                     name = part.get_param("name", None, "Content-Type") or ""
                     if name:
                         payload = part.get_payload(decode=True)
                         attachments.append({
                             "dosiernomo": name,
-                            "mime_tipo": content_type,
+                            "mime_tipo": ct,
                             "grandeco": len(payload) if payload else 0,
                         })
+                elif ct == "text/plain" and not body and not filename:
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        charset = part.get_content_charset() or "utf-8"
+                        body = payload.decode(charset, errors="replace")
+                elif ct == "text/html" and not html_body and not filename:
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        charset = part.get_content_charset() or "utf-8"
+                        html_body = payload.decode(charset, errors="replace")
         else:
             payload = msg.get_payload(decode=True)
             if payload:
