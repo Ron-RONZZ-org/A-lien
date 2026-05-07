@@ -1,6 +1,6 @@
 """Retposto commands — email operations.
 
-Commands: preni, sendi, respondi, plusendi, vidi, forigi, movi, serci, dosierujoj, mesagoj
+Commands: preni, sendi, respondi, plusendi, vidi, forigi, movi, serci, dosierujoj, mesagoj, elsuti
 """
 
 from __future__ import annotations
@@ -312,6 +312,7 @@ from A_lien.cli.retposto_message_ops import (  # noqa: E402
 )
 from A_lien.cli.retposto_plusendi import retposto_plusendi  # noqa: E402
 from A_lien.cli.retposto_vidi import retposto_vidi_mesago  # noqa: E402
+from A_lien.cli.retposto_elsuti import retposto_elsuti  # noqa: E402
 
 retposto.command(name="serci")(retposto_serci)
 retposto.command(name="respondi")(retposto_respondi)

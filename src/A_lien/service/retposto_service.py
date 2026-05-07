@@ -929,6 +929,96 @@ class RetpostoService(CRUDService, MessageStore, RetpostoSignatureMixin, Retpost
         )
         return folder_uuid
 
+    def extract_attachment(
+        self,
+        msg_uuid: str,
+        filename: str,
+        output_dir: str | None = None,
+    ) -> str:
+        """Extract an attachment from a message and save it to disk.
+
+        Connects to the IMAP server, fetches the raw message, walks MIME
+        parts to find the matching attachment, and writes it to ``output_dir``.
+
+        Args:
+            msg_uuid: Message UUID
+            filename: Attachment filename to extract (from ``get_attachments()``)
+            output_dir: Directory to save to (default: current working directory)
+
+        Returns:
+            Path to the saved file
+
+        Raises:
+            ValueError: If message, account, or attachment is not found
+            ConnectionError: If IMAP connection fails
+        """
+        from pathlib import Path
+
+        msg = self.get_message(msg_uuid)
+        if not msg:
+            raise ValueError(f"Message not found: {msg_uuid[:8]}")
+
+        konto_id = msg.get("konto_id", "")
+        imap_uid = msg.get("imap_uid")
+        if not imap_uid:
+            raise ValueError(f"Message {msg_uuid[:8]} has no IMAP UID")
+
+        acct = self.get_account_with_password(konto_id)
+        if not acct or "password" not in acct:
+            raise ValueError(f"Account {konto_id[:8]} has no password")
+
+        # Resolve folder name
+        folder_row = self.db.execute_one(
+            "SELECT nomo FROM dosierujoj WHERE uuid = ?",
+            (msg.get("dosierujo_id", ""),),
+        )
+        folder = folder_row["nomo"] if folder_row else "INBOX"
+
+        from A_lien.imap.client import IMAPClient
+
+        client = IMAPClient(
+            host=acct.get("imap_servilo", ""),
+            port=acct.get("imap_haveno", 993),
+            use_ssl=acct.get("imap_ssl", 1) == 1,
+        )
+        try:
+            client.connect(
+                username=acct.get("imap_uzantonomo", "") or acct.get("retposto", ""),
+                password=acct["password"],
+            )
+            raw = client.fetch_raw_message(folder, int(imap_uid))
+            if not raw:
+                raise ValueError(f"Could not fetch message from IMAP")
+        finally:
+            client.disconnect()
+
+        import email as email_lib
+
+        parsed = email_lib.message_from_bytes(raw)
+        payload: bytes | None = None
+
+        if parsed.is_multipart():
+            for part in parsed.walk():
+                disp = str(part.get("Content-Disposition") or "")
+                fn = part.get_filename()
+                if "attachment" in disp or fn:
+                    match_fn = fn or "attachment"
+                    if match_fn == filename:
+                        payload = part.get_payload(decode=True)
+                        break
+        else:
+            payload = parsed.get_payload(decode=True)
+
+        if not payload:
+            raise ValueError(f"Attachment '{filename}' not found in message")
+
+        out_dir = Path(output_dir or ".")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        safe_name = Path(filename).name  # Strip any directory components
+        out_path = out_dir / safe_name
+        out_path.write_bytes(payload)
+        return str(out_path.resolve())
+
 
 def get_retposto_service() -> RetpostoService:
     """Get the singleton RetpostoService."""
