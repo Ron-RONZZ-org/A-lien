@@ -103,14 +103,14 @@ class TestAccountCRUD:
     def test_update_account_with_new_password(self, service, sample_account):
         """Update account and change password in keyring."""
         account = service.create_account(sample_account, password="old-pw")
-        with patch("A_lien.service.retposto_service._set_keyring_pw") as mock:
+        with patch("A_lien.service.retposto_accounts._set_keyring_pw") as mock:
             service.update_account(account["uuid"], {}, password="new-pw")
             mock.assert_called_once()
 
     def test_delete_account(self, service, sample_account):
         """Delete account removes from DB and keyring."""
         account = service.create_account(sample_account, password="pw")
-        with patch("A_lien.service.retposto_service._del_keyring_pw") as mock:
+        with patch("A_lien.service.retposto_accounts._del_keyring_pw") as mock:
             service.delete_account(account["uuid"])
             mock.assert_called_once_with(account["uuid"])
         # Account should be in trash
