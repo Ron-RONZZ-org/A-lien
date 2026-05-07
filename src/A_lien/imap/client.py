@@ -393,6 +393,16 @@ class IMAPClient:
                         "mime_tipo": content_type,
                         "grandeco": len(payload) if payload else 0,
                     })
+                # Also catch parts with Content-Type name= param (no Content-Disposition)
+                elif content_type not in ("text/plain", "text/html") and not part.is_multipart():
+                    name = part.get_param("name", None, "Content-Type") or ""
+                    if name:
+                        payload = part.get_payload(decode=True)
+                        attachments.append({
+                            "dosiernomo": name,
+                            "mime_tipo": content_type,
+                            "grandeco": len(payload) if payload else 0,
+                        })
         else:
             payload = msg.get_payload(decode=True)
             if payload:
