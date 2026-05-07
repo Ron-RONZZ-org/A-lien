@@ -319,11 +319,13 @@ retposto.command(name="respondi")(retposto_respondi)
 retposto.command(name="forigi")(retposto_forigi)
 retposto.command(name="movi")(retposto_movi)
 retposto.command(name="plusendi")(retposto_plusendi)
+retposto.command(name="vidi")(retposto_vidi_mesago)
+retposto.command(name="elsuti")(retposto_elsuti)
 
 
-@retposto.command("sxuti")
-def retposto_sxuti() -> None:
-    """Sxuti flagojn al servilo (legita, forigita).
+@retposto.command("sinkronigi")
+def retposto_sinkronigi() -> None:
+    """Sinkronigi flagojn al servilo (legita, forigita).
 
     Processes the sync backlog — local read/delete flag changes
     that have not yet been synced to the IMAP server are sent now.
