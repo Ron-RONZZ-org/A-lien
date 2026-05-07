@@ -49,14 +49,18 @@ src/A_lien/
 ├── smtp.py                # SMTP send logic (attachments, signatures)
 ├── utils.py               # VCF import/export, contact normalization
 ├── service/
-│   ├── __init__.py        # exports both services
-│   ├── kontakto_service.py    # KontaktoService (CRUD + FTS5 + serialization)
-│   ├── kontakto_vcf.py        # VCF import/export (KontaktoVCFMixin)
-│   ├── kontakto_category.py   # Category management (KontaktoCategoryMixin)
-│   ├── retposto_service.py       # RetpostoService (accounts, IMAP/SMTP, search, messages)
-│   ├── retposto_signature.py     # Signature management (RetpostoSignatureMixin)
-│   ├── retposto_contact_mixin.py # Contact auto-creation (RetpostoContactMixin)
-│   └── retposto_spamo.py         # Spam block CRUD + Sieve sync (RetpostoSpamoMixin)
+│   ├── __init__.py              # exports both services
+│   ├── kontakto_service.py      # KontaktoService (CRUD + FTS5 + serialization)
+│   ├── kontakto_vcf.py          # VCF import/export (KontaktoVCFMixin)
+│   ├── kontakto_category.py     # Category management (KontaktoCategoryMixin)
+│   ├── retposto_service.py      # RetpostoService class def + singleton (~11 lines)
+│   ├── retposto_accounts.py     # Account CRUD + keyring password helpers
+│   ├── retposto_messaging.py    # Message queries (get, search, attachments)
+│   ├── retposto_msg_ops.py      # Message mutation & IMAP ops (trash, move, extract, flag sync)
+│   ├── retposto_sync.py         # IMAP sync + SMTP send + MessageStore protocol
+│   ├── retposto_signature.py    # Signature management (RetpostoSignatureMixin)
+│   ├── retposto_contact_mixin.py# Contact auto-creation (RetpostoContactMixin)
+│   └── retposto_spamo.py        # Spam block CRUD + Sieve sync (RetpostoSpamoMixin)
 └── data/
     ├── __init__.py
     ├── storage.py          # SQLite schema + FTSConfig + get_db()
@@ -144,22 +148,51 @@ Domain ─┬─ find_by_email(email) → dict | None
 ```
 
 ### RetpostoService (extends CRUDService)
+### RetpostoService (composed from mixins)
+
+RetpostoService is split into 7 mixin files, all composed in `retposto_service.py`:
+
+| Mixin | File | Key methods |
+|-------|------|-------------|
+| RetpostoAccountsMixin | `retposto_accounts.py` | `create/update/delete/list_account`, `get/password helpers` |
+| RetpostoMessagingMixin | `retposto_messaging.py` | `get_message`, `get_attachments`, `search_messages` |
+| RetpostoMessageOpsMixin | `retposto_msg_ops.py` | `mark_read`, `trash_message`, `move_message`, `extract_attachment`, `process_sync_backlog` |
+| RetpostoSyncMixin | `retposto_sync.py` | `sync_account`, `sync_all`, `send_email`, `store_message` |
+| RetpostoSignatureMixin | `retposto_signature.py` | Signature CRUD |
+| RetpostoContactMixin | `retposto_contact_mixin.py` | Auto-contact creation |
+| RetpostoSpamoMixin | `retposto_spamo.py` | Spam block + Sieve sync |
 
 ```
-CRUD ── accounts (kontoj), signatures, filters, spam blocks
-
-Domain ─┬─ create_account(data, password) → stores pw in keyring
-         ├─ get_password(uuid) → str
-         ├─ sync_account(uuid) → SyncResult (IMAP via imap.py)
-         ├─ sync_all() → dict[str, SyncResult] (ThreadPoolExecutor)
-         ├─ send_email(account, to, subject, body, ...) → str (SMTP via smtp.py)
-         ├─ get_messages(account, folder, page, per_page) → list[dict]
-         ├─ mark_read/starred(uuid, bool) → None
-         ├─ get_attachment/save_attachment(uuid) → None
-         ├─ list/create/update/delete_signature()
-         ├─ list/create/update/delete_filter()
-         ├─ upload_filters(account) → None (Sieve)
-         └─ list/add/remove_spam_block()
+Domain ─┬─ Account CRUD + keyring
+         │   create_account(data, password), update_account(...), delete_account(uuid)
+         │   delete_accounts(uuids) → list[dict]  (bulk with UUID prefix resolution)
+         │   get_account(uuid), list_accounts(), find_by_uuid_prefix(prefix)
+         │   get/set/delete_password(uuid) — system keyring
+         │
+         ├─ IMAP sync + SMTP
+         │   sync_account(uuid, force) → SyncResult
+         │   sync_all(force) → dict[str, SyncResult]
+         │   send_email(account, to, subject, body, ...)
+         │
+         ├─ Message queries
+         │   get_message(uuid) → dict | None
+         │   get_attachments(msg_uuid) → list[dict]  (table + inline JSON fallback)
+         │   search_messages(filters, limit) → list[dict]
+         │   find_message_by_uuid_prefix(prefix) → list[dict]
+         │
+         ├─ Message mutation
+         │   mark_read(msg_uuid, legita) → syncs \\Seen to IMAP server
+         │   trash_message(msg_uuid, permanent) → syncs \\Deleted to IMAP server
+         │   move_message(msg, dest_account, dest_folder) → IMAP MOVE or COPY+DELETE
+         │   extract_attachment(msg_uuid, filename) → str (saves to disk via IMAP)
+         │
+         ├─ Flag sync backlog
+         │   _imap_sync_flags(msg_uuid) → enqueues on IMAP failure
+         │   process_sync_backlog() → int (drains queue during next preni)
+         │
+         ├─ Signatures (RetpostoSignatureMixin)
+         ├─ Sieve filters + spam (RetpostoSpamoMixin)
+         └─ Auto-contact (RetpostoContactMixin)
 ```
 
 ## Code Standards
