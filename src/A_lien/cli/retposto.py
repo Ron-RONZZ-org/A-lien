@@ -303,149 +303,17 @@ def retposto_sendi(
         raise typer.Exit(1)
 
 
-def _format_size(size: int) -> str:
-    """Format byte count to human-readable string."""
-    if size > 1024 * 1024:
-        return f"{size / (1024 * 1024):.1f} MB"
-    if size > 1024:
-        return f"{size / 1024:.1f} KB"
-    return f"{size} B"
-
-
-def _build_attachments_html(attachments: list[dict]) -> str:
-    """Build an HTML attachment block suitable for appending to email body HTML.
-
-    Args:
-        attachments: List of attachment dicts with keys: dosiernomo, mime_tipo, grandeco, vojo
-
-    Returns:
-        HTML string with attachment list, or empty string if no attachments
-    """
-    if not attachments:
-        return ""
-    rows: list[str] = []
-    for att in attachments:
-        size = att.get("grandeco", 0)
-        size_str = _format_size(size)
-        mime = att.get("mime_tipo", "")
-        fname = html.escape(att.get("dosiernomo", ""))
-        vojo = att.get("vojo", "")
-        if vojo:
-            rows.append(
-                f'<li><a href="file://{vojo}">{fname}</a>'
-                f" ({size_str}) <code>{html.escape(mime)}</code></li>"
-            )
-        else:
-            rows.append(
-                f"<li>{fname} ({size_str}) <code>{html.escape(mime)}</code></li>"
-            )
-    return (
-        '<div class="attachments">\n'
-        f"<h3>{tr_multi('Aldonaĵoj:', 'Attachments:', 'Pièces jointes:')}</h3>\n"
-        f"<ul>\n{chr(10).join(rows)}\n</ul>\n"
-        "</div>\n"
-    )
-
-
-@retposto.command("vidi")
-def retposto_vidi_mesago(
-    uuid: str = typer.Argument(
-        ..., help=tr_multi("Mesaĝo UUID", "Message UUID", "UUID message")
-    ),
-    html: bool = typer.Option(
-        False, "--html", "-H",
-        help=tr_multi("Montri HTML en retumilo", "Show HTML in browser", "Afficher HTML dans le navigateur"),
-    ),
-) -> None:
-    """View an email by UUID or prefix (opens in editor by default)."""
-    svc = get_retposto_service()
-    msg = _resolve_message(svc, uuid)
-
-    # Mark as read
-    svc.mark_read(msg["uuid"])
-
-    if html:
-        html_body = msg.get("html_korpo", "") or msg.get("korpo", "")
-        if html_body:
-            # Append attachment links to HTML body
-            attachments = svc.get_attachments(msg["uuid"])
-            if attachments:
-                html_body += _build_attachments_html(attachments)
-            from A.core.markdown_html_view import preview_html
-
-            preview_html(
-                html_body,
-                open_browser=True,
-                title=msg.get("subjekto", "Mesaĝo"),
-            )
-        else:
-            error(tr_multi(
-                "Neniu HTML-enhavo por ĉi tiu mesaĝo.",
-                "No HTML content for this message.",
-                "Aucun contenu HTML pour ce message.",
-            ))
-        return
-
-    # Build email text
-    lines = [
-        f"From: {msg.get('de', '')}",
-        f"To: {msg.get('al', '')}",
-        f"Subject: {msg.get('subjekto', '')}",
-        f"Date: {msg.get('ricevita_je', '')}",
-        f"Priority: {msg.get('prioritato', 5)}",
-        f"Read: {'Yes' if msg.get('legita') else 'No'}",
-        "-" * 40,
-        "",
-    ]
-
-    body = msg.get("html_korpo", "") if html else msg.get("korpo", "")
-    if not body:
-        body = msg.get("korpo", "")
-    lines.append(body)
-
-    # Append attachments info
-    attachments = svc.get_attachments(msg["uuid"])
-    if attachments:
-        lines.append("")
-        lines.append("-" * 40)
-        lines.append(tr_multi("Aldonaĵoj:", "Attachments:", "Pièces jointes:"))
-        for idx, att in enumerate(attachments, 1):
-            size = att.get("grandeco", 0)
-            size_str = _format_size(size)
-            mime = att.get("mime_tipo", "?")
-            fname = att.get("dosiernomo", "?")
-            lines.append(f"  [{idx}] {fname} ({size_str}) [{mime}]")
-
-    email_text = "\n".join(lines)
-
-    # Open in editor or print
-    editor = os.environ.get("EDITOR", "less")
-    if editor in ("less", "more") or "-" in editor:
-        info(email_text)
-    else:
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".txt", delete=False, encoding="utf-8"
-        ) as f:
-            f.write(email_text)
-            temp_path = f.name
-        try:
-            os.system(f"{editor} {temp_path}")
-        finally:
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
-
-
 # Import and register serci from retposto_search.py
 from A_lien.cli.retposto_search import retposto_serci  # noqa: E402
-retposto.command(name="serci")(retposto_serci)
-
 from A_lien.cli.retposto_message_ops import (  # noqa: E402
     retposto_respondi,
     retposto_forigi,
     retposto_movi,
 )
 from A_lien.cli.retposto_plusendi import retposto_plusendi  # noqa: E402
+from A_lien.cli.retposto_vidi import retposto_vidi_mesago  # noqa: E402
 
+retposto.command(name="serci")(retposto_serci)
 retposto.command(name="respondi")(retposto_respondi)
 retposto.command(name="forigi")(retposto_forigi)
 retposto.command(name="movi")(retposto_movi)
