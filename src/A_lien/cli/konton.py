@@ -1,9 +1,10 @@
+from __future__ import annotations
+from A import confirm_action
 """Konton sub-typer — email account management.
 
 Commands: ls, vidi, aldoni, forigi, modifi
 """
 
-from __future__ import annotations
 
 from typing import Annotated, Any
 
@@ -200,7 +201,7 @@ def konton_forigi(
 
     # Confirmation prompt (unless --force)
     if not force:
-        typer.confirm(tr_multi(
+        confirm_action(tr_multi(
             f"Ĉu vi certas ke vi volas forigi {len(uuids)} konton(j)?",
             f"Are you sure you want to delete {len(uuids)} account(s)?",
             f"Êtes-vous sûr de vouloir supprimer {len(uuids)} compte(s)?",
