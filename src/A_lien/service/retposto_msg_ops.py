@@ -21,9 +21,17 @@ class RetpostoMessageOpsMixin:
         )
         self._imap_sync_flags(msg_uuid)
 
-    def _imap_sync_flags(self, msg_uuid: str) -> None:
-        """Sync local message flags to the IMAP server, queuing on failure."""
-        msg = self.get_message(msg_uuid)
+    def _imap_sync_flags(self, msg_uuid: str, msg: dict[str, Any] | None = None) -> None:
+        """Sync local message flags to the IMAP server, queuing on failure.
+
+        Args:
+            msg_uuid: Message UUID
+            msg: Pre-fetched message dict (optional). If provided, bypasses
+                 the ``get_message()`` call so trashed messages (forigita=1)
+                 can still sync ``\\Deleted`` to the server.
+        """
+        if msg is None:
+            msg = self.get_message(msg_uuid)
         if not msg:
             return
         konto_id = msg.get("konto_id", "")
@@ -159,7 +167,13 @@ class RetpostoMessageOpsMixin:
                 "UPDATE mesagoj SET forigita = 1, modifita_je = ? WHERE uuid = ?",
                 (now, msg_uuid),
             )
-            self._imap_sync_flags(msg_uuid)
+            # Re-read without forigita filter so _imap_sync_flags can see
+            # the forigita=1 state and send \Deleted to IMAP
+            msg = self.db.execute_one(
+                "SELECT * FROM mesagoj WHERE uuid = ?", (msg_uuid,)
+            )
+            if msg:
+                self._imap_sync_flags(msg_uuid, msg)
 
     def move_message(self, msg: dict, dest_account_uuid: str, dest_folder: str) -> None:
         """Move a message to a different account/folder."""
