@@ -53,11 +53,12 @@ class IMAPClient:
     """Low-level IMAP operations for a single connection."""
 
     def __init__(self, host: str, port: int = 993, use_ssl: bool = True,
-                 debug: int = 0):
+                 debug: int = 0, timeout: float | None = None):
         self.host = host
         self.port = port
         self.use_ssl = use_ssl
         self._debug = debug
+        self._timeout = timeout
         self._conn: imaplib.IMAP4 | None = None
 
     def connect(self, username: str, password: str) -> None:
@@ -72,9 +73,13 @@ class IMAPClient:
         """
         try:
             if self.use_ssl:
-                self._conn = imaplib.IMAP4_SSL(self.host, self.port)
+                self._conn = imaplib.IMAP4_SSL(
+                    self.host, self.port, timeout=self._timeout,
+                )
             else:
-                self._conn = imaplib.IMAP4(self.host, self.port)
+                self._conn = imaplib.IMAP4(
+                    self.host, self.port, timeout=self._timeout,
+                )
             if self._debug:
                 self._conn.debug = self._debug
             self._conn.login(username, password)

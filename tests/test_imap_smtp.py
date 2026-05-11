@@ -28,7 +28,7 @@ class TestIMAPClient:
             mock_instance = MagicMock()
             mock.return_value = mock_instance
             client.connect("user@test.com", "password")
-            mock.assert_called_once_with("imap.test.com", 993)
+            mock.assert_called_once_with("imap.test.com", 993, timeout=None)
             mock_instance.login.assert_called_once_with("user@test.com", "password")
 
     def test_connect_plain(self):
@@ -38,7 +38,7 @@ class TestIMAPClient:
             mock_instance = MagicMock()
             mock.return_value = mock_instance
             client.connect("user@test.com", "password")
-            mock.assert_called_once_with("imap.test.com", 143)
+            mock.assert_called_once_with("imap.test.com", 143, timeout=None)
 
     def test_connect_failure(self):
         """Connection error raises ConnectionError."""
