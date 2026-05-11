@@ -61,6 +61,64 @@ def _build_attachments_html(attachments: list[dict[str, Any]]) -> str:
     )
 
 
+def _build_metadata_html(msg: dict[str, Any]) -> str:
+    """Build an HTML metadata header for email message.
+
+    Renders From, To, Subject, Date, Priority, and Read status
+    as a styled panel above the message body in HTML view.
+
+    Args:
+        msg: Message dict from RetpostoService.
+
+    Returns:
+        HTML string with metadata table.
+    """
+    prio = msg.get("prioritato", 5)
+    legita = msg.get("legita", 0)
+    read_label = tr_multi("Legita", "Read", "Lu")
+    unread_label = tr_multi("Nelegita", "Unread", "Non lu")
+
+    rows: list[str] = []
+    fields = [
+        (tr_multi("De:", "From:", "De:"), str(msg.get("de", ""))),
+        (tr_multi("Al:", "To:", "\u00c0:"), str(msg.get("al", ""))),
+        (
+            tr_multi("Temeto:", "Subject:", "Sujet:"),
+            str(msg.get("subjekto", "")),
+        ),
+        (
+            tr_multi("Dato:", "Date:", "Date:"),
+            str(msg.get("ricevita_je", "")),
+        ),
+        (
+            tr_multi("Prioritato:", "Priority:", "Priorit\u00e9:"),
+            str(prio),
+        ),
+        (
+            tr_multi("Stato:", "Status:", "\u00c9tat:"),
+            read_label if legita else unread_label,
+        ),
+    ]
+    for label, value in fields:
+        escaped = html.escape(value) if value else "\u2014"
+        rows.append(
+            f'<tr><td style="font-weight:600;white-space:nowrap;'
+            f'padding:2px 12px 2px 0;vertical-align:top;'
+            f'color:#555;">{label}</td>'
+            f'<td style="padding:2px 0;word-break:break-all;">{escaped}</td></tr>'
+        )
+
+    return (
+        '<table style="font-family:-apple-system,BlinkMacSystemFont,'
+        '"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.5;'
+        'width:100%;max-width:720px;border-collapse:collapse;'
+        'background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;'
+        'padding:8px 12px;margin-bottom:16px;">\n'
+        f"{chr(10).join(rows)}\n"
+        "</table>\n"
+    )
+
+
 # ── vidi — view a message ────────────────────────────────────────────────────
 
 
@@ -81,24 +139,32 @@ def retposto_vidi_mesago(
     svc.mark_read(msg["uuid"])
 
     if html:
+        html_parts: list[str] = []
+        metadata = _build_metadata_html(msg)
+        html_parts.append(metadata)
+
         html_body = msg.get("html_korpo", "") or msg.get("korpo", "")
         if html_body:
-            attachments = svc.get_attachments(msg["uuid"])
-            if attachments:
-                html_body += _build_attachments_html(attachments)
-            from A.core.markdown_html_view import preview_html
-
-            preview_html(
-                html_body,
-                open_browser=True,
-                title=msg.get("subjekto", "Mesa\u011do"),
-            )
+            html_parts.append(html_body)
         else:
             error(tr_multi(
                 "Neniu HTML-enhavo por \u0109i tiu mesa\u011do.",
                 "No HTML content for this message.",
                 "Aucun contenu HTML pour ce message.",
             ))
+
+        attachments = svc.get_attachments(msg["uuid"])
+        if attachments:
+            html_parts.append(_build_attachments_html(attachments))
+
+        if html_body or attachments:
+            from A.core.markdown_html_view import preview_html
+
+            preview_html(
+                "\n".join(html_parts),
+                open_browser=True,
+                title=msg.get("subjekto", "Mesa\u011do"),
+            )
         return
 
     # Build email text
