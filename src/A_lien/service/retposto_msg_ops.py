@@ -313,3 +313,83 @@ class RetpostoMessageOpsMixin:
         out_path = out_dir / safe_name
         out_path.write_bytes(payload)
         return str(out_path.resolve())
+
+    def get_attachment_content(
+        self, msg_uuid: str, filename: str,
+    ) -> bytes:
+        """Get attachment content as bytes, without saving to disk.
+
+        Tries BLOB cache first; falls back to IMAP fetch if needed.
+
+        Args:
+            msg_uuid: Message UUID.
+            filename: Attachment filename to retrieve.
+
+        Returns:
+            Attachment content as bytes.
+
+        Raises:
+            ValueError: If message or attachment not found.
+        """
+        # ── Try BLOB cache first ──────────────────────────────────────────
+        row = self.db.execute_one(
+            "SELECT enhavo FROM aldonajxoj "
+            "WHERE mesagxo_id = ? AND dosiernomo = ?",
+            (msg_uuid, filename),
+        )
+        if row and row["enhavo"] is not None:
+            return row["enhavo"]
+
+        # ── Fallback: fetch from IMAP ─────────────────────────────────────
+        msg = self.get_message(msg_uuid)
+        if not msg:
+            raise ValueError(f"Message not found: {msg_uuid[:8]}")
+        konto_id = msg.get("konto_id", "")
+        imap_uid = msg.get("imap_uid")
+        if not imap_uid:
+            raise ValueError(f"Message {msg_uuid[:8]} has no IMAP UID")
+        acct = self.get_account_with_password(konto_id)
+        if not acct or "password" not in acct:
+            raise ValueError(f"Account {konto_id[:8]} has no password")
+        folder_row = self.db.execute_one(
+            "SELECT nomo FROM dosierujoj WHERE uuid = ?",
+            (msg.get("dosierujo_id", ""),),
+        )
+        folder = folder_row["nomo"] if folder_row else "INBOX"
+
+        from A_lien.imap.client import IMAPClient
+        client = IMAPClient(
+            host=acct.get("imap_servilo", ""),
+            port=acct.get("imap_haveno", 993),
+            use_ssl=acct.get("imap_ssl", 1) == 1,
+        )
+        try:
+            client.connect(
+                username=acct.get("imap_uzantonomo", "") or acct.get("retposto", ""),
+                password=acct["password"],
+            )
+            raw = client.fetch_raw_message(folder, int(imap_uid))
+            if not raw:
+                raise ValueError(f"Could not fetch message from IMAP")
+        finally:
+            client.disconnect()
+
+        import email as email_lib
+        parsed = email_lib.message_from_bytes(raw)
+        if parsed.is_multipart():
+            for part in parsed.walk():
+                disp = str(part.get("Content-Disposition") or "")
+                fn = part.get_filename()
+                if "attachment" in disp or fn:
+                    match_fn = fn or "attachment"
+                    if match_fn == filename:
+                        payload = part.get_payload(decode=True)
+                        if payload:
+                            return payload
+                        break
+        else:
+            payload = parsed.get_payload(decode=True)
+            if payload:
+                return payload
+
+        raise ValueError(f"Attachment '{filename}' not found in message")
