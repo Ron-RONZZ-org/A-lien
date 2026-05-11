@@ -129,7 +129,7 @@ class IMAPClient:
         """
         result: list[dict[str, Any]] = []
         typ, data = self.conn.list()
-        if typ != "OK":
+        if typ != "OK" or not data:
             return result
         # Regex to extract folder name from LIST response:
         #   (\Flags) "/" "QuotedName"  or  (\Flags) "/" UnquotedName
@@ -300,7 +300,7 @@ class IMAPClient:
                     typ, fetch_data = self.conn.fetch(
                         uid_list, "(FLAGS BODY.PEEK[] UID)",
                     )
-                if typ != "OK":
+                if typ != "OK" or not fetch_data:
                     result.errors.append(
                         f"FETCH error at IDs {chunk[0]}..{chunk[-1]}"
                     )
