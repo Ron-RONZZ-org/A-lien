@@ -44,7 +44,7 @@ class MessageStore(Protocol):
         """Return set of known IMAP UIDs (integers) for dedup."""
         ...
 
-    def store_message(self, data: dict[str, Any]) -> str:
+    def store_message(self, data: dict[str, Any], force: bool = False) -> str:
         """Persist a parsed message dict. Return the stored message UUID."""
         ...
 
