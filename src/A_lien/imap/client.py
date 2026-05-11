@@ -275,6 +275,8 @@ class IMAPClient:
             known_uids: set[int] = set()
             if not force:
                 known_uids = db_store.get_known_uids(konto_id, dosierujo_id)
+            if known_uids is None:
+                known_uids = set()
             new_uids = [uid for uid in all_uids if uid not in known_uids]
 
             if not new_uids:
@@ -339,6 +341,8 @@ class IMAPClient:
                         )
 
             self.conn.close()
+        except TypeError as e:
+            result.errors.append(f"Sync type-error [{folder}]: {e}")
         except Exception as e:
             result.errors.append(f"Sync error: {e}")
 
