@@ -21,14 +21,14 @@ from A_lien.service.retposto_sync import RetpostoSyncMixin
 
 class RetpostoService(
     CRUDService,
-    MessageStore,
+    RetpostoSyncMixin,
+    RetpostoMessageOpsMixin,
+    RetpostoMessagingMixin,
+    RetpostoAccountsMixin,
     RetpostoSignatureMixin,
     RetpostoContactMixin,
     RetpostoSpamoMixin,
-    RetpostoAccountsMixin,
-    RetpostoMessagingMixin,
-    RetpostoMessageOpsMixin,
-    RetpostoSyncMixin,
+    MessageStore,
 ):
     """Email account management — composed from mixins."""
 
