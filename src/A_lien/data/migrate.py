@@ -72,6 +72,18 @@ def _imap_uid_migration(conn: Any) -> None:
     )
 
 
+def _add_kontaktoj_fields(conn: Any) -> None:
+    """Add postadreso and postkodo columns to kontaktoj (if missing)."""
+    existing = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM pragma_table_info('kontaktoj')").fetchall()
+    }
+    if "postadreso" not in existing:
+        conn.execute("ALTER TABLE kontaktoj ADD COLUMN postadreso TEXT")
+    if "postkodo" not in existing:
+        conn.execute("ALTER TABLE kontaktoj ADD COLUMN postkodo TEXT")
+
+
 # Migration registry: list of (version, description, steps)
 _MIGRATIONS: list[tuple[int, str, list[MigrationStep]]] = [
     # Version 1 is reserved for initial schema creation (done in storage.py)
@@ -113,6 +125,11 @@ _MIGRATIONS: list[tuple[int, str, list[MigrationStep]]] = [
             ")",
             "CREATE INDEX IF NOT EXISTS idx_sync_backlog_msg ON _sync_backlog(msg_uuid)",
         ],
+    ),
+    (
+        6,
+        "Add postadreso and postkodo columns to kontaktoj table",
+        [_add_kontaktoj_fields],
     ),
 ]
 

@@ -198,6 +198,8 @@ CREATE TABLE IF NOT EXISTS kontaktoj (
     konfirmita       INTEGER NOT NULL DEFAULT 0,
     kategorioj       TEXT NOT NULL DEFAULT '[]',
     noto             TEXT,
+    postadreso       TEXT,
+    postkodo         TEXT,
     bildo            TEXT,
     kreita_je        TEXT NOT NULL,
     modifita_je      TEXT NOT NULL

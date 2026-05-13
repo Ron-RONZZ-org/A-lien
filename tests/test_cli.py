@@ -105,22 +105,31 @@ class TestCLIKontakto:
         assert "Neniuj" in result.stdout or "No results" in result.stdout
 
     def test_aldoni(self, runner, clean_service):
-        """Add a contact via CLI."""
+        """Add a contact via CLI with renamed options."""
         result = runner.invoke(kontakto, [
             "aldoni",
-            "--nomo", "Test",
-            "--familia-nomo", "User",
-            "--plena-nomo", "Test User",
-            "--retposto", "test@example.com",
+            "--persona-nomo", "Test",
+            "--nomo", "User",
         ])
         assert result.exit_code == 0, f"aldoni failed: {result.stdout}"
         assert "kreita" in result.stdout.lower() or "created" in result.stdout.lower()
 
     def test_aldoni_requires_name(self, runner, clean_service):
-        """Add requires a name."""
+        """Add requires a name (persona_nomo or nomo)."""
         result = runner.invoke(kontakto, ["aldoni"])
         assert result.exit_code != 0
-        assert "Bezonata" in result.stdout or "Name or full name" in result.stdout
+        assert "Bezonata" in result.stdout or "Given name" in result.stdout
+
+    def test_aldoni_with_postkodo(self, runner, clean_service):
+        """Add a contact with postcode."""
+        result = runner.invoke(kontakto, [
+            "aldoni",
+            "--persona-nomo", "Test",
+            "--nomo", "User",
+            "--poŝtkodo", "12345",
+        ])
+        assert result.exit_code == 0, f"aldoni with postkodo failed: {result.stdout}"
+        assert "kreita" in result.stdout.lower() or "created" in result.stdout.lower()
 
     def test_forigi(self, runner, seeded_service):
         """Delete a contact."""

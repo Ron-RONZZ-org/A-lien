@@ -11,7 +11,7 @@ import typer
 
 from A import error, info, tr_multi, warning
 from A_lien.service import get_kontakto_service
-from A_lien.utils import normalize_multi_field, split_full_name
+from A_lien.utils import normalize_multi_field
 
 
 def _parse_telefonnumeroj(
@@ -39,21 +39,13 @@ def _parse_kampoj(kampo: list[str]) -> dict[str, str]:
 
 
 def kontakto_aldoni(
-    nomo: str = typer.Option(
-        "", "--nomo", "-n",
+    persona_nomo: str = typer.Option(
+        "", "--persona-nomo", "-pn",
         help=tr_multi("Persona nomo", "Given name", "Prénom"),
     ),
-    familia_nomo: str = typer.Option(
-        "", "--familia-nomo", "--fn",
+    nomo: str = typer.Option(
+        "", "--nomo", "-n",
         help=tr_multi("Familia nomo", "Family name", "Nom de famille"),
-    ),
-    plena_nomo: str = typer.Option(
-        "", "--plena-nomo", "--pn",
-        help=tr_multi("Plena nomo", "Full name", "Nom complet"),
-    ),
-    retposto_opt: str = typer.Option(
-        "", "--retposto", "-r",
-        help=tr_multi("Ĉefa retpoŝto", "Primary email", "Email principal"),
     ),
     organizo: str = typer.Option(
         "", "--organizo", "-o",
@@ -99,6 +91,10 @@ def kontakto_aldoni(
         "", "--postadreso", "-p",
         help=tr_multi("Poŝtadreso", "Postal address", "Adresse postale"),
     ),
+    postkodo: str = typer.Option(
+        "", "--poŝtkodo", "-pk",
+        help=tr_multi("Poŝtkodo", "Postcode", "Code postal"),
+    ),
     kampo: list[str] = typer.Option(
         [], "--kampo", "-c",
         help=tr_multi(
@@ -123,24 +119,22 @@ def kontakto_aldoni(
     """Add a new contact."""
     service = get_kontakto_service()
 
-    if not plena_nomo and nomo:
-        plena_nomo = nomo
-    if not plena_nomo:
+    if not persona_nomo and not nomo:
         error(tr_multi(
-            "Bezonata nomo aŭ plena nomo.",
-            "Name or full name required.",
-            "Nom ou nom complet requis.",
+            "Bezonata persona nomo aŭ familia nomo.",
+            "Given name or family name required.",
+            "Prénom ou nom requis.",
         ))
         raise typer.Exit(1)
 
-    if not nomo and not familia_nomo:
-        nomo, familia_nomo = split_full_name(plena_nomo)
+    # Auto-construct full name from given + family name
+    parts = [p for p in (persona_nomo, nomo) if p]
+    plena_nomo = " ".join(parts)
 
     data: dict[str, Any] = {
-        "nomo": nomo,
-        "familia_nomo": familia_nomo,
+        "nomo": persona_nomo,
+        "familia_nomo": nomo,
         "plena_nomo": plena_nomo,
-        "retposto": retposto_opt,
         "organizo": organizo,
         "noto": noto,
     }
@@ -155,10 +149,16 @@ def kontakto_aldoni(
         data["organiza_identiga_numero"] = organiza_identiga_numero
     if postadreso:
         data["postadreso"] = postadreso
+    if postkodo:
+        data["postkodo"] = postkodo
     if telefonnumeroj:
         data["telefonnumeroj"] = _parse_telefonnumeroj(telefonnumeroj)
     if retposhtadresoj:
-        data["retposhtadresoj"] = _parse_retposhtadresoj(retposhtadresoj)
+        parsed = _parse_retposhtadresoj(retposhtadresoj)
+        data["retposhtadresoj"] = parsed
+        # Extract primary email for retposto column
+        primary = next((a["valoro"] for a in parsed if a.get("cxefa")), parsed[0]["valoro"])
+        data["retposto"] = primary
     if kampo:
         parsed = _parse_kampoj(kampo)
         if parsed:
@@ -190,37 +190,49 @@ def kontakto_modifi(
     uuid: str = typer.Argument(
         ..., help=tr_multi("Kontakto UUID", "Contact UUID", "UUID contact")
     ),
-    nomo: str = typer.Option(
-        "", "--nomo", "-n",
+    persona_nomo: str = typer.Option(
+        "", "--persona-nomo", "-pn",
         help=tr_multi("Persona nomo", "Given name", "Prénom"),
     ),
-    familia_nomo: str = typer.Option(
-        "", "--familia-nomo", "--fn",
+    nomo: str = typer.Option(
+        "", "--nomo", "-n",
         help=tr_multi("Familia nomo", "Family name", "Nom de famille"),
-    ),
-    plena_nomo: str = typer.Option(
-        "", "--plena-nomo", "--pn",
-        help=tr_multi("Plena nomo", "Full name", "Nom complet"),
-    ),
-    retposto_opt: str = typer.Option(
-        "", "--retposto", "-r",
-        help=tr_multi("Ĉefa retpoŝto", "Primary email", "Email principal"),
     ),
     organizo: str = typer.Option(
         "", "--organizo", "-o",
         help=tr_multi("Organizo", "Organization", "Organisation"),
     ),
-    telefono: str = typer.Option(
-        "", "--telefono", "-t",
-        help=tr_multi("Telefonnumero", "Phone number", "Téléphone"),
+    telefonnumeroj: list[str] = typer.Option(
+        [], "--telefonnumero", "-t",
+        help=tr_multi(
+            "Ripeti telefonnumeron: NOMO:etikedo[:prima]",
+            "Repeat phone: NUMBER:label[:primary]",
+            "Répéter téléphone: NUMÉRO:étiquette[:principal]",
+        ),
+    ),
+    retposhtadresoj: list[str] = typer.Option(
+        [], "--retposhtadreso",
+        help=tr_multi(
+            "Ripeti retpoŝton: ADRESO:etikedo[:prima]",
+            "Repeat email: ADDRESS:label[:primary]",
+            "Répéter email: ADRESSE:étiquette[:principal]",
+        ),
+    ),
+    postadreso: str = typer.Option(
+        "", "--postadreso", "-p",
+        help=tr_multi("Poŝtadreso", "Postal address", "Adresse postale"),
+    ),
+    postkodo: str = typer.Option(
+        "", "--poŝtkodo", "-pk",
+        help=tr_multi("Poŝtkodo", "Postcode", "Code postal"),
     ),
     noto: str = typer.Option(
         "", "--noto", "-N",
         help=tr_multi("Notoj", "Notes", "Notes"),
     ),
-    kategorio: str = typer.Option(
-        "", "--kategorio", "-k",
-        help=tr_multi("Kategorio", "Category", "Catégorie"),
+    kategorio: list[str] = typer.Option(
+        [], "--kategorio", "-k",
+        help=tr_multi("Kategorio (ripetebla)", "Category (repeatable)", "Catégorie (répétable)"),
     ),
 ) -> None:
     """Modify an existing contact."""
@@ -236,24 +248,33 @@ def kontakto_modifi(
         raise typer.Exit(1)
 
     updates: dict[str, Any] = {}
+    if persona_nomo:
+        updates["nomo"] = persona_nomo
+        # Rebuild plena_nomo if given name changes
+        current_family = existing.get("familia_nomo", "")
+        updates["plena_nomo"] = f"{persona_nomo} {current_family}".strip()
     if nomo:
-        updates["nomo"] = nomo
-    if familia_nomo:
-        updates["familia_nomo"] = familia_nomo
-    if plena_nomo:
-        updates["plena_nomo"] = plena_nomo
-    if retposto_opt:
-        updates["retposto"] = retposto_opt
+        updates["familia_nomo"] = nomo
+        # Rebuild plena_nomo if family name changes
+        current_given = updates.get("nomo") or existing.get("nomo", "")
+        updates["plena_nomo"] = f"{current_given} {nomo}".strip()
     if organizo:
         updates["organizo"] = organizo
-    if telefono:
-        updates["telefonnumeroj"] = [{
-            "valoro": telefono, "etikedo": "VOICE", "cxefa": True,
-        }]
+    if telefonnumeroj:
+        updates["telefonnumeroj"] = _parse_telefonnumeroj(telefonnumeroj)
+    if retposhtadresoj:
+        parsed = _parse_retposhtadresoj(retposhtadresoj)
+        updates["retposhtadresoj"] = parsed
+        primary = next((a["valoro"] for a in parsed if a.get("cxefa")), parsed[0]["valoro"])
+        updates["retposto"] = primary
+    if postadreso:
+        updates["postadreso"] = postadreso
+    if postkodo:
+        updates["postkodo"] = postkodo
     if noto:
         updates["noto"] = noto
     if kategorio:
-        updates["kategorioj"] = [kategorio]
+        updates["kategorioj"] = kategorio
 
     if not updates:
         warning(tr_multi(
