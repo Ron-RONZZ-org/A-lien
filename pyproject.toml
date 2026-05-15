@@ -33,6 +33,9 @@ A-lien = "A_lien.data.migration_register:register"
 [tool.hatch.build.targets.wheel]
 packages = ["src/A_lien"]
 
+[tool.uv.sources]
+a-core = { path = "../A-core" }
+
 [tool.poetry]
 name = "A-lien"
 version = "0.1.0"
