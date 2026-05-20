@@ -24,6 +24,7 @@ dev = [
 ]
 
 [project.entry-points."A.commands"]
+lien = "A_lien.cli:app"
 retposto = "A_lien.cli:retposto"
 kontakto = "A_lien.cli:kontakto"
 
