@@ -34,7 +34,7 @@ A-lien = "A_lien.data.migration_register:register"
 packages = ["src/A_lien"]
 
 [tool.uv.sources]
-a-core = { path = "../A-core" }
+a-core = { path = "../A-core", editable = true }
 
 [tool.poetry]
 name = "A-lien"
