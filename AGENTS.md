@@ -43,7 +43,10 @@ src/A_lien/
 ├── imap/                   # IMAP sync engine (split from monolithic imap.py)
 │   ├── __init__.py         # Re-exports all public API
 │   ├── helpers.py          # Header decoding, email parsing, auto-contact filters
-│   ├── client.py           # IMAPClient, MessageStore protocol, SyncResult
+│   ├── client.py           # IMAPClient (~308 lines)
+│   ├── _sync_types.py      # SyncResult, MessageStore dataclasses
+│   ├── _message_parser.py  # IMAP message parsing
+│   ├── _message_ops.py     # IMAP message operations
 │   └── sync.py             # sync_account, sync_accounts_concurrent
 ├── keyring.py             # Keyring abstraction (wraps `keyring` library)
 ├── smtp.py                # SMTP send logic (attachments, signatures)
