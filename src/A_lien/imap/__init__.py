@@ -15,8 +15,8 @@ from A_lien.imap.helpers import (
     _parse_email_address,
     should_autosave_contact,
 )
+from A_lien.imap._sync_types import MessageStore, SyncResult
 from A_lien.imap.client import IMAPClient
-from A_lien.imap.client import MessageStore, SyncResult
 from A_lien.imap.sync import (
     sync_account,
     sync_accounts_concurrent,

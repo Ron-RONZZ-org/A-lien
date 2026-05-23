@@ -6,7 +6,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 import uuid
 
-from A_lien.imap.client import IMAPClient, SyncResult
+from A_lien.imap._sync_types import SyncResult
+from A_lien.imap.client import IMAPClient
 
 
 def sync_account(

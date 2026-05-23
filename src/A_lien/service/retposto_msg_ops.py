@@ -52,6 +52,7 @@ class RetpostoMessageOpsMixin:
         folder = folder_row["nomo"] if folder_row else "INBOX"
         legita = bool(msg.get("legita", 0))
         forigita = bool(msg.get("forigita", 0))
+        from A_lien.imap._message_ops import set_flags
         from A_lien.imap.client import IMAPClient
         client = IMAPClient(
             host=acct.get("imap_servilo", ""),
@@ -73,7 +74,7 @@ class RetpostoMessageOpsMixin:
                 add.append("\\Deleted")
             else:
                 remove.append("\\Deleted")
-            client.set_flags(folder, int(imap_uid), add=add or None, remove=remove or None)
+            set_flags(client.conn, folder, int(imap_uid), add=add or None, remove=remove or None)
         except Exception:
             self._enqueue_sync(msg)
         finally:
@@ -112,6 +113,7 @@ class RetpostoMessageOpsMixin:
             acct = self.get_account_with_password(konto_id)
             if not acct or "password" not in acct:
                 continue
+            from A_lien.imap._message_ops import set_flags
             from A_lien.imap.client import IMAPClient
             client = IMAPClient(
                 host=acct.get("imap_servilo", ""),
@@ -143,7 +145,7 @@ class RetpostoMessageOpsMixin:
                             add.append("\\Deleted")
                         else:
                             remove.append("\\Deleted")
-                        client.set_flags(folder, int(imap_uid), add=add or None, remove=remove or None)
+                        set_flags(client.conn, folder, int(imap_uid), add=add or None, remove=remove or None)
                         self.db.execute("DELETE FROM _sync_backlog WHERE id = ?", (item["id"],))
                         synced += 1
                     except Exception:
@@ -184,6 +186,9 @@ class RetpostoMessageOpsMixin:
             raise ValueError(f"Source account {src_account_uuid[:8]} has no password")
         if not dest_account or "password" not in dest_account:
             raise ValueError(f"Destination account {dest_account_uuid[:8]} has no password")
+        from A_lien.imap._message_ops import (
+            append_message, delete_message, fetch_raw_message, move_message,
+        )
         from A_lien.imap.client import IMAPClient
         imap = IMAPClient(
             host=src_account.get("imap_servilo", ""),
@@ -203,7 +208,7 @@ class RetpostoMessageOpsMixin:
             uid = int(msg.get("uid", 0))
             same_account = src_account_uuid == dest_account_uuid
             if same_account:
-                imap.move_message(src_folder, uid, dest_folder)
+                move_message(imap.conn, src_folder, uid, dest_folder)
                 dest_folder_id = self._ensure_folder_exists(dest_account_uuid, dest_folder)
                 now = datetime.now(timezone.utc).isoformat()
                 self.db.execute(
@@ -211,7 +216,7 @@ class RetpostoMessageOpsMixin:
                     (dest_folder_id, now, msg["uuid"]),
                 )
             else:
-                raw = imap.fetch_raw_message(src_folder, uid)
+                raw = fetch_raw_message(imap.conn, src_folder, uid)
                 if not raw:
                     raise ValueError(f"Could not fetch raw message (UID {uid})")
                 dest_imap = IMAPClient(
@@ -224,10 +229,10 @@ class RetpostoMessageOpsMixin:
                         username=dest_account.get("imap_uzantonomo", "") or dest_account.get("retposto", ""),
                         password=dest_account["password"],
                     )
-                    dest_imap.append_message(dest_folder, raw)
+                    append_message(dest_imap.conn, dest_folder, raw)
                 finally:
                     dest_imap.disconnect()
-                imap.delete_message(src_folder, uid)
+                delete_message(imap.conn, src_folder, uid)
                 dest_folder_id = self._ensure_folder_exists(dest_account_uuid, dest_folder)
                 now = datetime.now(timezone.utc).isoformat()
                 self.db.execute(
@@ -275,6 +280,7 @@ class RetpostoMessageOpsMixin:
             (msg.get("dosierujo_id", ""),),
         )
         folder = folder_row["nomo"] if folder_row else "INBOX"
+        from A_lien.imap._message_ops import fetch_raw_message
         from A_lien.imap.client import IMAPClient
         client = IMAPClient(
             host=acct.get("imap_servilo", ""),
@@ -286,7 +292,7 @@ class RetpostoMessageOpsMixin:
                 username=acct.get("imap_uzantonomo", "") or acct.get("retposto", ""),
                 password=acct["password"],
             )
-            raw = client.fetch_raw_message(folder, int(imap_uid))
+            raw = fetch_raw_message(client.conn, folder, int(imap_uid))
             if not raw:
                 raise ValueError(f"Could not fetch message from IMAP")
         finally:
@@ -359,6 +365,7 @@ class RetpostoMessageOpsMixin:
         )
         folder = folder_row["nomo"] if folder_row else "INBOX"
 
+        from A_lien.imap._message_ops import fetch_raw_message
         from A_lien.imap.client import IMAPClient
         client = IMAPClient(
             host=acct.get("imap_servilo", ""),
@@ -371,7 +378,7 @@ class RetpostoMessageOpsMixin:
                 username=acct.get("imap_uzantonomo", "") or acct.get("retposto", ""),
                 password=acct["password"],
             )
-            raw = client.fetch_raw_message(folder, int(imap_uid))
+            raw = fetch_raw_message(client.conn, folder, int(imap_uid))
             if not raw:
                 raise ValueError(f"Could not fetch message from IMAP")
         finally:
