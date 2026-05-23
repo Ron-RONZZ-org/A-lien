@@ -1,5 +1,4 @@
 from __future__ import annotations
-from A import confirm_action
 """Konton sub-typer — email account management.
 
 Commands: ls, vidi, aldoni, forigi, modifi
@@ -10,7 +9,7 @@ from typing import Annotated, Any
 
 import typer
 
-from A import error, info, tr_multi, warning
+from A import confirm_action, error, info, tr_multi, warning
 from A_lien.service import get_retposto_service
 
 konton = typer.Typer(
@@ -201,11 +200,13 @@ def konton_forigi(
 
     # Confirmation prompt (unless --force)
     if not force:
-        confirm_action(tr_multi(
+        if not confirm_action(tr_multi(
             f"Ĉu vi certas ke vi volas forigi {len(uuids)} konton(j)?",
             f"Are you sure you want to delete {len(uuids)} account(s)?",
             f"Êtes-vous sûr de vouloir supprimer {len(uuids)} compte(s)?",
-        ), abort=True)
+        )):
+            info(tr_multi("Nuligita.", "Cancelled.", "Annulé."))
+            raise typer.Exit(0)
 
     # Execute bulk delete
     results = service.delete_accounts(uuids)
