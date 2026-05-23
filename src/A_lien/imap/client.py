@@ -1,52 +1,20 @@
-"""IMAP client wrapper and protocol definitions."""
+"""IMAP client wrapper — connection, folder listing, sync."""
 
 from __future__ import annotations
 
-import imaplib
 import email as email_lib
+import imaplib
 import re
 import socket
 import ssl
-from email.utils import parsedate_to_datetime
-from datetime import datetime, timezone
-from typing import Any, Protocol
 import uuid
-import json
+from datetime import datetime, timezone
+from typing import Any
 
 from A import tr_multi
 from A.core.network import format_connection_error
-from A_lien.imap.helpers import (
-    _decode_mime_header,
-    _parse_address_list,
-)
-
-
-class SyncResult:
-    """Result of a folder/account sync operation."""
-
-    def __init__(self) -> None:
-        self.total = 0
-        self.new = 0
-        self.updated = 0
-        self.errors: list[str] = []
-
-    def __repr__(self) -> str:
-        return (
-            f"SyncResult(total={self.total}, new={self.new}, "
-            f"updated={self.updated}, errors={len(self.errors)})"
-        )
-
-
-class MessageStore(Protocol):
-    """Interface for message persistence during IMAP sync."""
-
-    def get_known_uids(self, konto_id: str, dosierujo_id: str) -> set[int]:
-        """Return set of known IMAP UIDs (integers) for dedup."""
-        ...
-
-    def store_message(self, data: dict[str, Any], force: bool = False) -> str:
-        """Persist a parsed message dict. Return the stored message UUID."""
-        ...
+from A_lien.imap._message_parser import parse_email_message
+from A_lien.imap._sync_types import MessageStore, SyncResult
 
 
 class IMAPClient:
@@ -117,7 +85,7 @@ class IMAPClient:
         if self._conn:
             try:
                 self._conn.logout()
-            except Exception:  # noqa: S110 — cleanup, ignore errors
+            except Exception:
                 pass
             self._conn = None
 
@@ -131,8 +99,6 @@ class IMAPClient:
         typ, data = self.conn.list()
         if typ != "OK" or not data:
             return result
-        # Regex to extract folder name from LIST response:
-        #   (\Flags) "/" "QuotedName"  or  (\Flags) "/" UnquotedName
         _folder_re = re.compile(rb'"/" "?([^"]+)"?\s*$')
         for line in data:
             if not line:
@@ -141,7 +107,6 @@ class IMAPClient:
             if m:
                 name = m.group(1).decode("utf-8", errors="replace").strip()
             else:
-                # Fallback for unusual formats: split by quotes
                 decoded = line.decode("utf-8", errors="replace")
                 parts = decoded.split('"')
                 if len(parts) >= 3:
@@ -149,7 +114,6 @@ class IMAPClient:
                 else:
                     continue
             if not name or name == "/":
-                # Bare separator — use flags to identify special folders
                 decoded = line.decode("utf-8", errors="replace")
                 flags_str = decoded.split('"')[0].strip("() ")
                 if "\\Sent" in flags_str:
@@ -186,7 +150,7 @@ class IMAPClient:
                 "VALUES (?, ?, ?, ?, ?, ?)",
                 (dosierujo_id, konto_id, folder_name, None, now, now),
             )
-        except Exception:  # noqa: S110 — INSERT OR IGNORE, non-fatal
+        except Exception:
             pass
         return dosierujo_id
 
@@ -221,14 +185,11 @@ class IMAPClient:
                 result.errors.append(f"Cannot select folder: {folder}")
                 return result
 
-            # Get mailbox message count from SELECT response
             mailbox_count = int(data[0]) if data and data[0] else 0
 
-            # Fetch all IMAP UIDs from server (stable per-folder identifiers).
-            # Some servers cap SEARCH at ~5000 results — paginate if needed.
             use_uid_fetch = True
             all_uids: list[int] = []
-            search_uid_from: int | None = None  # None = "ALL"
+            search_uid_from: int | None = None
             while True:
                 if search_uid_from is not None:
                     typ, uid_data = self.conn.uid(
@@ -250,15 +211,11 @@ class IMAPClient:
                     break
                 all_uids.extend(chunk)
 
-                # If result count is suspiciously round, try fetching more
                 if len(chunk) in (5000, 10000, 20000):
                     search_uid_from = chunk[-1] + 1
                 else:
                     break
 
-            # If UID SEARCH returned far fewer than mailbox contains,
-            # the server might not support UID SEARCH properly.
-            # Fall back to regular SEARCH (returns sequence numbers).
             if mailbox_count > 0 and len(all_uids) < mailbox_count // 2:
                 result.errors.append(
                     f"UID SEARCH returned {len(all_uids)} of {mailbox_count} "
@@ -271,7 +228,6 @@ class IMAPClient:
 
             result.total = len(all_uids)
 
-            # Filter out already-synced UIDs (unless force refresh)
             known_uids: set[int] = set()
             if not force:
                 known_uids = db_store.get_known_uids(konto_id, dosierujo_id)
@@ -283,10 +239,8 @@ class IMAPClient:
                 self.conn.close()
                 return result
 
-            # Fetch newest UIDs first (UIDs are monotonically increasing)
             new_uids.sort(reverse=True)
 
-            # Paginate in chunks of 100 to avoid command-line overflow
             chunk_size = 100
             _IMAP_UID_RE = re.compile(rb"UID (\d+)")
 
@@ -313,9 +267,8 @@ class IMAPClient:
                         continue
                     raw_flags = item[0] if item[0] else b""
                     raw_data = item[1]
-                    imap_uid = -1  # placeholder for error messages
+                    imap_uid = -1
                     try:
-                        # Extract IMAP UID from FETCH response
                         uid_match = _IMAP_UID_RE.search(raw_flags)
                         if not uid_match:
                             result.errors.append(
@@ -328,11 +281,10 @@ class IMAPClient:
                             continue
 
                         msg = email_lib.message_from_bytes(raw_data)
-
-                        self._store_message(
-                            folder, msg, konto_id, dosierujo_id,
-                            imap_uid, db_store, force=force,
+                        data = parse_email_message(
+                            msg, konto_id, dosierujo_id, imap_uid,
                         )
+                        db_store.store_message(data, force=force)
                         result.new += 1
 
                     except Exception as e:
@@ -347,211 +299,6 @@ class IMAPClient:
             result.errors.append(f"Sync error: {e}")
 
         return result
-
-    def _store_message(
-        self,
-        folder: str,
-        msg: Any,
-        konto_id: str,
-        dosierujo_id: str,
-        imap_uid: int,
-        db_store: MessageStore,
-        force: bool = False,
-    ) -> str | None:
-        """Parse a single email and store it via db_store."""
-        now = datetime.now(timezone.utc).isoformat()
-        message_id = _decode_mime_header(msg.get("Message-ID", ""))
-        in_reply_to = _decode_mime_header(msg.get("In-Reply-To", ""))
-        references = _decode_mime_header(msg.get("References", ""))
-
-        subject = _decode_mime_header(msg.get("Subject", ""))
-        from_header = _decode_mime_header(msg.get("From", ""))
-        to_raw = _decode_mime_header(msg.get("To", ""))
-        cc_raw = _decode_mime_header(msg.get("Cc", ""))
-        date_str = msg.get("Date", "")
-
-        ricevita_je = now
-        if date_str:
-            try:
-                dt = parsedate_to_datetime(date_str)
-                ricevita_je = dt.isoformat()
-            except (TypeError, ValueError):  # noqa: S110 — invalid date, use current time
-                pass
-
-        body = ""
-        html_body = ""
-        attachments: list[dict[str, Any]] = []
-        if msg.is_multipart():
-            for part in msg.walk():
-                ct = part.get_content_type()
-                disp = str(part.get("Content-Disposition") or "")
-                filename = part.get_filename()
-                # Detect attachments via Content-Disposition header (matching autish-legacy)
-                if "attachment" in disp or filename:
-                    fname = filename or "attachment"
-                    payload = part.get_payload(decode=True)
-                    attachments.append({
-                        "dosiernomo": fname,
-                        "mime_tipo": ct,
-                        "grandeco": len(payload) if payload else 0,
-                    })
-                # Calendar invites and other non-text MIME parts
-                elif ct not in ("text/plain", "text/html") and not part.is_multipart():
-                    name = part.get_param("name", None, "Content-Type") or ""
-                    if name:
-                        payload = part.get_payload(decode=True)
-                        attachments.append({
-                            "dosiernomo": name,
-                            "mime_tipo": ct,
-                            "grandeco": len(payload) if payload else 0,
-                        })
-                elif ct == "text/plain" and not body and not filename:
-                    payload = part.get_payload(decode=True)
-                    if payload:
-                        charset = part.get_content_charset() or "utf-8"
-                        body = payload.decode(charset, errors="replace")
-                elif ct == "text/html" and not html_body and not filename:
-                    payload = part.get_payload(decode=True)
-                    if payload:
-                        charset = part.get_content_charset() or "utf-8"
-                        html_body = payload.decode(charset, errors="replace")
-        else:
-            payload = msg.get_payload(decode=True)
-            if payload:
-                charset = msg.get_content_charset() or "utf-8"
-                body = payload.decode(charset, errors="replace")
-
-        data: dict[str, Any] = {
-            "uuid": str(uuid.uuid4()),
-            "konto_id": konto_id,
-            "dosierujo_id": dosierujo_id,
-            "message_id": message_id,
-            "in_reply_to": in_reply_to,
-            "references_hdr": references,
-            "imap_uid": imap_uid,
-            "de": from_header,
-            "al": json.dumps(_parse_address_list(to_raw), ensure_ascii=False),
-            "kc": json.dumps(_parse_address_list(cc_raw), ensure_ascii=False),
-            "bkc": "[]",
-            "subjekto": subject,
-            "korpo": body,
-            "html_korpo": html_body,
-            "prioritato": 5,
-            "legita": 0,
-            "stelo": 0,
-            "spamo": 0,
-            "forigita": 0,
-            "aldonajxoj": json.dumps(attachments, ensure_ascii=False),
-            "etikedoj": "[]",
-            "ricevita_je": ricevita_je,
-            "kreita_je": now,
-            "modifita_je": now,
-        }
-
-        stored_uuid = db_store.store_message(data, force=force)
-        return stored_uuid
-
-    # ── Message operations (move, delete, append) ────────────────────────────
-
-    def move_message(
-        self, source_folder: str, uid: int, target_folder: str
-    ) -> bool:
-        """Move a message via IMAP MOVE (RFC 6851) or COPY+DELETE fallback.
-
-        Args:
-            source_folder: Source folder name
-            uid: IMAP UID of the message
-            target_folder: Target folder name
-
-        Returns:
-            True if the move succeeded, False otherwise
-        """
-        self.conn.select(source_folder)
-        try:
-            typ, _ = self.conn.uid("MOVE", str(uid), target_folder)
-            if typ == "OK":
-                return True
-        except imaplib.IMAP4.error:
-            pass
-        # Fallback: COPY + STORE +FLAGS.SILENT \Deleted
-        typ, _ = self.conn.uid("COPY", str(uid), target_folder)
-        if typ != "OK":
-            return False
-        self.conn.uid("STORE", str(uid), "+FLAGS.SILENT", "(\\Deleted)")
-        self.conn.expunge()
-        return True
-
-    def delete_message(self, folder: str, uid: int) -> None:
-        """Mark a message as ``\\Deleted`` in an IMAP folder.
-
-        Args:
-            folder: Folder name
-            uid: IMAP UID of the message
-        """
-        self.conn.select(folder)
-        self.conn.uid("STORE", str(uid), "+FLAGS.SILENT", "(\\Deleted)")
-
-    def set_flags(
-        self, folder: str, uid: int,
-        add: list[str] | None = None,
-        remove: list[str] | None = None,
-    ) -> None:
-        """Add or remove IMAP flags on a message.
-
-        Args:
-            folder: Folder name
-            uid: IMAP UID of the message
-            add: Flags to add (e.g. ``["\\Seen", "\\Flagged"]``)
-            remove: Flags to remove (e.g. ``["\\Deleted"]``)
-        """
-        self.conn.select(folder)
-        if add:
-            flag_str = " ".join(add)
-            self.conn.uid("STORE", str(uid), "+FLAGS.SILENT", f"({flag_str})")
-        if remove:
-            flag_str = " ".join(remove)
-            self.conn.uid("STORE", str(uid), "-FLAGS.SILENT", f"({flag_str})")
-
-    def append_message(
-        self, folder: str, raw_message: bytes, flags: list[str] | None = None
-    ) -> bool:
-        """Append a raw message to an IMAP folder.
-
-        Args:
-            folder: Target folder name
-            raw_message: Raw RFC 5322 message bytes
-            flags: Optional IMAP flags (e.g. ``["\\Seen"]``)
-
-        Returns:
-            True if the append succeeded
-        """
-        flag_str = " ".join(flags) if flags else ""
-        try:
-            typ, _ = self.conn.append(folder, flag_str, None, raw_message)
-            return typ == "OK"
-        except imaplib.IMAP4.error:
-            return False
-
-    def fetch_raw_message(self, folder: str, uid: int) -> bytes | None:
-        """Fetch raw RFC 5322 message bytes by UID.
-
-        Args:
-            folder: Folder name
-            uid: IMAP UID of the message
-
-        Returns:
-            Raw message bytes or ``None`` if not found
-        """
-        self.conn.select(folder, readonly=True)
-        try:
-            typ, data = self.conn.uid(
-                "FETCH", str(uid), "(BODY[] UID)"
-            )
-            if typ != "OK" or not data or not isinstance(data[0], tuple):
-                return None
-            return data[0][1]
-        except imaplib.IMAP4.error:
-            return None
 
 
 __all__ = [
