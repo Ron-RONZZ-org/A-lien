@@ -31,6 +31,9 @@ kontakto = "A_lien.cli:kontakto"
 [project.entry-points."A.migrations"]
 A-lien = "A_lien.data.migration_register:register"
 
+[project.entry-points."A.backup"]
+lien = "A_lien.data.storage:get_backup_targets"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/A_lien"]
 

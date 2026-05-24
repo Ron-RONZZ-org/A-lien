@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from A.core.paths import data_dir
 from A.core.paths import ensure_dirs as _ensure_dirs
+from A.core.backup_targets import BackupTarget
 from A.data.base import SQLiteDB
 from A.data.search import FTSConfig
 from A.utils.normalize import fold_search_text
@@ -343,8 +344,21 @@ def get_db(path: str | None = None) -> SQLiteDB:
     return db
 
 
+def get_backup_targets() -> list[BackupTarget]:
+    """Return backup targets for A-lien."""
+    return [
+        BackupTarget(
+            path=data_dir() / "lien.db",
+            category="data",
+            module="lien",
+            label="Lien database",
+        ),
+    ]
+
+
 __all__ = [
     "ensure_dirs",
     "get_db",
     "KONTAKTOJ_FTS_CONFIG",
+    "get_backup_targets",
 ]
