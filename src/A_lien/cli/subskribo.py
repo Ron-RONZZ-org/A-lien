@@ -5,6 +5,7 @@ Commands: ls, aldoni, forigi
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -56,16 +57,57 @@ def subskribo_aldoni(
     nomo: str = typer.Argument(
         ..., help=tr_multi("Subskribo nomo", "Signature name", "Nom de signature")
     ),
-    teksto: str = typer.Option(
-        ..., "--teksto", "-t",
-        help=tr_multi("Subskribo teksto", "Signature text", "Texte de signature"),
+    teksto: str | None = typer.Option(
+        None, "--teksto", "-t",
+        help=tr_multi("Subskriba teksto (enlinie)", "Signature text (inline)", "Texte de signature (en ligne)"),
+    ),
+    dosiero: str | None = typer.Option(
+        None, "--dosiero", "-D",
+        help=tr_multi(
+            "Subskriba dosiero (anstataŭas --teksto)",
+            "Signature file (replaces --teksto)",
+            "Fichier de signature (remplace --teksto)",
+        ),
     ),
     estas_html: bool = typer.Option(
         False, "--html",
-        help=tr_multi("Teksto estas HTML", "Text is HTML", "Texte est HTML"),
+        help=tr_multi("Marki kiel HTML", "Mark as HTML", "Marquer comme HTML"),
     ),
 ) -> None:
-    """Add a new signature."""
+    """Add a new signature.
+
+    Provide the signature text either inline (--teksto/-t)
+    or from a file (--dosiero/-D), but not both.
+    """
+    if dosiero and teksto:
+        error(tr_multi(
+            "Donu --teksto AŬ --dosiero, ne ambaŭ.",
+            "Provide --teksto OR --dosiero, not both.",
+            "Fournissez --teksto OU --dosiero, pas les deux.",
+        ))
+        raise typer.Exit(1)
+
+    if dosiero:
+        path = Path(dosiero)
+        if not path.exists():
+            error(tr_multi(
+                f"Dosiero ne ekzistas: {dosiero}",
+                f"File not found: {dosiero}",
+                f"Fichier introuvable: {dosiero}",
+            ))
+            raise typer.Exit(1)
+        teksto = path.read_text(encoding="utf-8")
+        # Auto-detect HTML from file extension unless --html was explicitly passed
+        if not estas_html and path.suffix.lower() in (".html", ".htm"):
+            estas_html = True
+    elif not teksto:
+        error(tr_multi(
+            "Donu --teksto/-t aŭ --dosiero/-D.",
+            "Provide --teksto/-t or --dosiero/-D.",
+            "Fournissez --teksto/-t ou --dosiero/-D.",
+        ))
+        raise typer.Exit(1)
+
     service = get_retposto_service()
     try:
         sig = service.create_signature(nomo, teksto, estas_html)
@@ -85,25 +127,41 @@ def subskribo_aldoni(
 
 @subskribo_app.command("forigi")
 def subskribo_forigi(
-    uuids: Annotated[list[str], typer.Argument(
-        ..., help=tr_multi("Subskribo UUID (pluraj)", "Signature UUIDs (multiple)", "UUIDs signature (plusieurs)")
+    identifiers: Annotated[list[str], typer.Argument(
+        ..., help=tr_multi(
+            "Subskribo nomo aŭ UUID (pluraj)",
+            "Signature name or UUID (multiple)",
+            "Nom ou UUID de signature (plusieurs)",
+        )
     )],
 ) -> None:
-    """Delete signatures."""
+    """Delete signatures.
+
+    Accepts signature names or UUIDs (or a mix). Names are matched
+    exactly; UUIDs support 8+ char prefix matching.
+    """
     service = get_retposto_service()
-    for uid in uuids:
+    for ident in identifiers:
+        sig = service.resolve_signature(ident)
+        if not sig:
+            error(tr_multi(
+                f"Subskribo ne trovita: {ident}",
+                f"Signature not found: {ident}",
+                f"Signature introuvable: {ident}",
+            ))
+            continue
         try:
-            service.delete_signature(uid)
+            service.delete_signature(sig["uuid"])
             info(tr_multi(
-                f"Subskribo forigita: {uid[:8]}",
-                f"Signature deleted: {uid[:8]}",
-                f"Signature supprimée: {uid[:8]}",
+                f"Subskribo forigita: {sig['nomo']} ({sig['uuid'][:8]})",
+                f"Signature deleted: {sig['nomo']} ({sig['uuid'][:8]})",
+                f"Signature supprimée: {sig['nomo']} ({sig['uuid'][:8]})",
             ))
         except Exception as e:
             error(tr_multi(
-                f"Eraro: {uid[:8]} — {e}",
-                f"Error: {uid[:8]} — {e}",
-                f"Erreur: {uid[:8]} — {e}",
+                f"Eraro: {ident} — {e}",
+                f"Error: {ident} — {e}",
+                f"Erreur: {ident} — {e}",
             ))
 
 

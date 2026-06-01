@@ -35,6 +35,34 @@ class RetpostoSignatureMixin:
         """Get a single signature by UUID."""
         return self._signatures.get(uuid)
 
+    def find_signature_by_name(self, nomo: str) -> dict[str, Any] | None:
+        """Find a signature by exact name.
+
+        Args:
+            nomo: Signature name (exact match, case-sensitive per SQLite default).
+
+        Returns:
+            Signature dict or None if not found.
+        """
+        return self._signatures.get_by_field("nomo", nomo)
+
+    def resolve_signature(self, ident: str) -> dict[str, Any] | None:
+        """Resolve a signature by UUID (prefix) or name.
+
+        Tries UUID prefix match first, then exact name match.
+        Useful for CLI commands that accept either format.
+
+        Args:
+            ident: UUID prefix (8+ chars) or exact signature name.
+
+        Returns:
+            Signature dict or None if not found.
+        """
+        sig = self._signatures.get(ident)
+        if sig:
+            return sig
+        return self.find_signature_by_name(ident)
+
     def update_signature(self, uuid: str, data: dict[str, Any]) -> dict[str, Any]:
         """Update a signature."""
         return self._signatures.update(uuid, data)

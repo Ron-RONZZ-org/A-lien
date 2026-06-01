@@ -256,6 +256,10 @@ _IDX_SYNC_BACKLOG_MSG = """
 CREATE INDEX IF NOT EXISTS idx_sync_backlog_msg ON _sync_backlog(msg_uuid);
 """
 
+_IDX_SUBSKRIBOJ_NOMO = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_subskriboj_nomo ON subskriboj(nomo);
+"""
+
 # ── All DDL statements in creation order ─────────────────────────────────────
 
 _SCHEMA_STATEMENTS: list[str] = [
@@ -265,6 +269,7 @@ _SCHEMA_STATEMENTS: list[str] = [
     _CREATE_MESAGXOJ,
     _CREATE_ALDONAJXOJ,
     _CREATE_SUBSKRIBOJ,
+    _IDX_SUBSKRIBOJ_NOMO,
     _CREATE_FILTRAJ,
     _CREATE_SPAMO_BLOKOJ,
     _CREATE_KONTAKTOJ,

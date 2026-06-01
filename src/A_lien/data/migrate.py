@@ -84,6 +84,35 @@ def _add_kontaktoj_fields(conn: Any) -> None:
         conn.execute("ALTER TABLE kontaktoj ADD COLUMN postkodo TEXT")
 
 
+def _dedup_subskriboj_names(conn: Any) -> None:
+    """Rename duplicate subskriboj.nomo values to avoid UNIQUE index violation.
+
+    If multiple signatures share the same name, append ``-{uuid[:4]}``
+    suffix to the duplicates. Then create the UNIQUE index.
+    """
+    # Find all names that appear more than once
+    rows = conn.execute(
+        "SELECT nomo, COUNT(*) AS cnt FROM subskriboj GROUP BY nomo HAVING cnt > 1"
+    ).fetchall()
+    for row in rows:
+        dupes = conn.execute(
+            "SELECT uuid, nomo FROM subskriboj WHERE nomo = ? ORDER BY kreita_je",
+            (row["nomo"],),
+        ).fetchall()
+        # Keep the first (oldest) as-is, rename the rest
+        for dupe in dupes[1:]:
+            new_name = f"{dupe['nomo']}-{dupe['uuid'][:4]}"
+            conn.execute(
+                "UPDATE subskriboj SET nomo = ? WHERE uuid = ?",
+                (new_name, dupe["uuid"]),
+            )
+
+    # Create the unique index (IF NOT EXISTS makes it idempotent)
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_subskriboj_nomo ON subskriboj(nomo)"
+    )
+
+
 # Migration registry: list of (version, description, steps)
 _MIGRATIONS: list[tuple[int, str, list[MigrationStep]]] = [
     # Version 1 is reserved for initial schema creation (done in storage.py)
@@ -130,6 +159,11 @@ _MIGRATIONS: list[tuple[int, str, list[MigrationStep]]] = [
         6,
         "Add postadreso and postkodo columns to kontaktoj table",
         [_add_kontaktoj_fields],
+    ),
+    (
+        7,
+        "Add UNIQUE index on subskriboj(nomo) — deduplicate names first",
+        [_dedup_subskriboj_names],
     ),
 ]
 

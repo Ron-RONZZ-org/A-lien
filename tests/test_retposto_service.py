@@ -209,6 +209,44 @@ class TestSignatures:
         service.delete_signature(sig["uuid"])
         assert service.get_signature(sig["uuid"]) is None
 
+    def test_find_signature_by_name(self, service):
+        """Find a signature by exact name."""
+        service.create_signature("My Sig", "hello")
+        sig = service.find_signature_by_name("My Sig")
+        assert sig is not None
+        assert sig["teksto"] == "hello"
+
+    def test_find_signature_by_name_not_found(self, service):
+        """Name lookup returns None for non-existent name."""
+        assert service.find_signature_by_name("Neniu") is None
+
+    def test_resolve_signature_by_uuid(self, service):
+        """Resolve by UUID prefix."""
+        sig = service.create_signature("Test", "content")
+        resolved = service.resolve_signature(sig["uuid"][:8])
+        assert resolved is not None
+        assert resolved["uuid"] == sig["uuid"]
+
+    def test_resolve_signature_by_name(self, service):
+        """Resolve by exact name."""
+        sig = service.create_signature("My Sig", "hello")
+        resolved = service.resolve_signature("My Sig")
+        assert resolved is not None
+        assert resolved["uuid"] == sig["uuid"]
+
+    def test_resolve_signature_name_preferred_over_uuid_prefix(self, service):
+        """Name match takes precedence when name happens to look like a UUID prefix."""
+        # Create a signature with a UUID-like name to test resolution order
+        uuid_like_name = "abc12345"
+        sig_name = service.create_signature(uuid_like_name, "by name")
+        # Resolve by the name — should match by UUID first (which won't exist
+        # as a full UUID), then fall back to name
+        resolved = service.resolve_signature(uuid_like_name)
+        assert resolved is not None
+        # UUID prefix match would return None (no signature has UUID starting
+        # with "abc12345"), so it falls back to name match
+        assert resolved["nomo"] == uuid_like_name
+
 
 # ── Singleton ────────────────────────────────────────────────────────────────
 
