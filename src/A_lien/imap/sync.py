@@ -6,33 +6,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 import uuid
 
-from A_lien.data.storage import get_db
 from A_lien.imap._sync_types import SyncResult
 from A_lien.imap.client import IMAPClient
-from A_lien.service.retposto_sync import get_known_uids, store_message
-
-
-class _ThreadLocalStore:
-    """MessageStore with a per-instance SQLiteDB connection.
-
-    Each instance creates its own SQLiteDB, avoiding the
-    "SQLite objects created in a thread can only be used in that same thread"
-    error when sync_accounts_concurrent runs sync tasks in a ThreadPoolExecutor.
-
-    Implements the MessageStore protocol and exposes ``.db`` for code that
-    accesses it directly (e.g. ``IMAPClient._ensure_folder``).
-    """
-
-    def __init__(self) -> None:
-        self.db = get_db()
-
-    def get_known_uids(self, konto_id: str, dosierujo_id: str) -> set[int]:
-        """Get set of already-synced IMAP UIDs (delegates to module helper)."""
-        return get_known_uids(self.db, konto_id, dosierujo_id)
-
-    def store_message(self, data: dict[str, Any], force: bool = False) -> str:
-        """Insert or update a message (delegates to module helper)."""
-        return store_message(self.db, data, force=force)
 
 
 def sync_account(
@@ -95,16 +70,16 @@ def sync_accounts_concurrent(
 ) -> dict[str, SyncResult]:
     """Sync multiple accounts concurrently using ThreadPoolExecutor.
 
-    Each worker thread creates its own ``_ThreadLocalStore`` (with a private
-    ``SQLiteDB`` connection) to avoid the
-    "SQLite objects created in a thread can only be used in that same thread"
-    error that occurs when a single ``sqlite3.Connection`` is shared across threads.
+    Thread safety: each worker thread shares the same ``db_store``
+    (a ``RetpostoService`` singleton).  This is safe because
+    ``A.data.base.SQLiteDB`` uses ``threading.local`` connection caching,
+    giving each thread its own ``sqlite3.Connection`` to the same database
+    file.  SQLite WAL mode handles concurrent reads + single writer correctly.
 
     Args:
         accounts: List of account dicts with connection info.
                   Each must include: host, port, use_ssl, username, password,
-                  uuid.  ``db_store`` is **not** passed from the caller;
-                  each thread creates its own.
+                  uuid, db_store (MessageStore)
         max_workers: Max concurrent connections
 
     Returns:
@@ -116,8 +91,7 @@ def sync_accounts_concurrent(
         uid = acct.get("uuid", "?")
         email = acct.get("retposto", uid[:8])
         pw = acct.get("password", "")
-        # Per-thread SQLiteDB — each thread gets its own connection
-        db_store = _ThreadLocalStore()
+        db_store_m = acct.get("db_store")
         try:
             sr = sync_account(
                 host=acct.get("imap_servilo", ""),
@@ -126,7 +100,7 @@ def sync_accounts_concurrent(
                 username=acct.get("imap_uzantonomo", "") or acct.get("retposto", ""),
                 password=pw,
                 konto_id=uid,
-                db_store=db_store,
+                db_store=db_store_m,
                 force=acct.get("force", False),
             )
             return uid, sr
