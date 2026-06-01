@@ -10,67 +10,101 @@ import uuid as uuid_mod
 from datetime import datetime, timezone
 from typing import Any
 
+__all__ = [
+    "get_known_uids",
+    "store_message",
+    "RetpostoSyncMixin",
+]
+
+
+# ── Module-level helpers (used by RetpostoSyncMixin and _ThreadLocalStore) ──
+
+
+def get_known_uids(db: Any, konto_id: str, dosierujo_id: str) -> set[int]:
+    """Get set of already-synced IMAP UIDs for an account+folder.
+
+    Args:
+        db: SQLiteDB instance
+        konto_id: Account UUID
+        dosierujo_id: Folder UUID
+    """
+    rows = db.execute(
+        "SELECT imap_uid FROM mesagoj WHERE konto_id = ? AND dosierujo_id = ? AND imap_uid IS NOT NULL",
+        (konto_id, dosierujo_id),
+    )
+    return {r["imap_uid"] for r in rows}
+
+
+def store_message(db: Any, data: dict[str, Any], force: bool = False) -> str:
+    """Insert or update a message in mesagoj table.
+
+    Args:
+        db: SQLiteDB instance
+        data: Message data dict
+        force: If True, re-download existing messages (preserving local flags)
+
+    Returns:
+        Message UUID
+    """
+    msg_uuid = data.get("uuid") or str(uuid_mod.uuid4())
+    local_legita = None
+    local_stelo = None
+    local_spamo = None
+    local_forigita = None
+    if force:
+        imap_uid = data.get("imap_uid")
+        if imap_uid is not None:
+            existing = db.execute_one(
+                "SELECT uuid, legita, stelo, spamo, forigita FROM mesagoj "
+                "WHERE konto_id = ? AND dosierujo_id = ? AND imap_uid = ?",
+                (data["konto_id"], data["dosierujo_id"], imap_uid),
+            )
+            if existing:
+                msg_uuid = existing["uuid"]
+                local_legita = existing["legita"]
+                local_stelo = existing["stelo"]
+                local_spamo = existing["spamo"]
+                local_forigita = existing["forigita"]
+                db.execute("DELETE FROM mesagoj WHERE uuid = ?", (msg_uuid,))
+    db.execute(
+        """INSERT OR IGNORE INTO mesagoj
+           (uuid, konto_id, dosierujo_id, message_id, in_reply_to,
+            references_hdr, imap_uid, de, al, kc, bkc,
+            subjekto, korpo, html_korpo,
+            prioritato, legita, stelo, spamo, forigita,
+            aldonajxoj, etikedoj, ricevita_je,
+            kreita_je, modifita_je)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (msg_uuid, data.get("konto_id", ""), data.get("dosierujo_id", ""),
+         data.get("message_id", ""), data.get("in_reply_to", ""),
+         data.get("references_hdr", ""), data.get("imap_uid"),
+         data.get("de", ""), data.get("al", "[]"), data.get("kc", "[]"),
+         data.get("bkc", "[]"), data.get("subjekto", ""), data.get("korpo", ""),
+         data.get("html_korpo", ""), data.get("prioritato", 5),
+         int(data.get("legita", 0)), int(data.get("stelo", 0)),
+         int(data.get("spamo", 0)), int(data.get("forigita", 0)),
+         data.get("aldonajxoj", "[]"), data.get("etikedoj", "[]"),
+         data.get("ricevita_je", ""), data.get("kreita_je", ""),
+         data.get("modifita_je", "")),
+    )
+    if force and local_legita is not None:
+        db.execute(
+            "UPDATE mesagoj SET legita = ?, stelo = ?, spamo = ?, forigita = ? WHERE uuid = ?",
+            (local_legita, local_stelo, local_spamo, local_forigita, msg_uuid),
+        )
+    return msg_uuid
+
 
 class RetpostoSyncMixin:
     """IMAP sync, SMTP send, and MessageStore protocol."""
 
     def get_known_uids(self, konto_id: str, dosierujo_id: str) -> set[int]:
         """Get set of already-synced IMAP UIDs for an account+folder."""
-        rows = self.db.execute(
-            "SELECT imap_uid FROM mesagoj WHERE konto_id = ? AND dosierujo_id = ? AND imap_uid IS NOT NULL",
-            (konto_id, dosierujo_id),
-        )
-        return {r["imap_uid"] for r in rows}
+        return get_known_uids(self.db, konto_id, dosierujo_id)
 
     def store_message(self, data: dict[str, Any], force: bool = False) -> str:
         """Insert or update a message in mesagoj table."""
-        msg_uuid = data.get("uuid") or str(uuid_mod.uuid4())
-        local_legita = None
-        local_stelo = None
-        local_spamo = None
-        local_forigita = None
-        if force:
-            imap_uid = data.get("imap_uid")
-            if imap_uid is not None:
-                existing = self.db.execute_one(
-                    "SELECT uuid, legita, stelo, spamo, forigita FROM mesagoj "
-                    "WHERE konto_id = ? AND dosierujo_id = ? AND imap_uid = ?",
-                    (data["konto_id"], data["dosierujo_id"], imap_uid),
-                )
-                if existing:
-                    msg_uuid = existing["uuid"]
-                    local_legita = existing["legita"]
-                    local_stelo = existing["stelo"]
-                    local_spamo = existing["spamo"]
-                    local_forigita = existing["forigita"]
-                    self.db.execute("DELETE FROM mesagoj WHERE uuid = ?", (msg_uuid,))
-        self.db.execute(
-            """INSERT OR IGNORE INTO mesagoj
-               (uuid, konto_id, dosierujo_id, message_id, in_reply_to,
-                references_hdr, imap_uid, de, al, kc, bkc,
-                subjekto, korpo, html_korpo,
-                prioritato, legita, stelo, spamo, forigita,
-                aldonajxoj, etikedoj, ricevita_je,
-                kreita_je, modifita_je)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (msg_uuid, data.get("konto_id", ""), data.get("dosierujo_id", ""),
-             data.get("message_id", ""), data.get("in_reply_to", ""),
-             data.get("references_hdr", ""), data.get("imap_uid"),
-             data.get("de", ""), data.get("al", "[]"), data.get("kc", "[]"),
-             data.get("bkc", "[]"), data.get("subjekto", ""), data.get("korpo", ""),
-             data.get("html_korpo", ""), data.get("prioritato", 5),
-             int(data.get("legita", 0)), int(data.get("stelo", 0)),
-             int(data.get("spamo", 0)), int(data.get("forigita", 0)),
-             data.get("aldonajxoj", "[]"), data.get("etikedoj", "[]"),
-             data.get("ricevita_je", ""), data.get("kreita_je", ""),
-             data.get("modifita_je", "")),
-        )
-        if force and local_legita is not None:
-            self.db.execute(
-                "UPDATE mesagoj SET legita = ?, stelo = ?, spamo = ?, forigita = ? WHERE uuid = ?",
-                (local_legita, local_stelo, local_spamo, local_forigita, msg_uuid),
-            )
-        return msg_uuid
+        return store_message(self.db, data, force=force)
 
     def sync_account(self, uuid: str, force: bool = False) -> Any:
         """Sync messages for a single account."""
