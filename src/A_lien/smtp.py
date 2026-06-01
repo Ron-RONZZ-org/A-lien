@@ -144,18 +144,17 @@ class SMTPClient:
             if cc:
                 msg["Cc"] = ", ".join(cc)
 
-        # Set priority headers (1=highest, 5=lowest)
-        if priority != 5:
-            msg["X-Priority"] = str(priority)
-            if priority <= 2:
-                msg["X-MSMail-Priority"] = "High"
-                msg["Importance"] = "High"
-            elif priority >= 4:
-                msg["X-MSMail-Priority"] = "Low"
-                msg["Importance"] = "Low"
-            else:
-                msg["X-MSMail-Priority"] = "Normal"
-                msg["Importance"] = "Normal"
+        # Set priority headers (1=highest, 3=normal, 5=lowest)
+        msg["X-Priority"] = str(priority)
+        if priority <= 2:
+            msg["X-MSMail-Priority"] = "High"
+            msg["Importance"] = "High"
+        elif priority >= 4:
+            msg["X-MSMail-Priority"] = "Low"
+            msg["Importance"] = "Low"
+        else:
+            msg["X-MSMail-Priority"] = "Normal"
+            msg["Importance"] = "Normal"
 
         try:
             self.conn.sendmail(from_addr, all_recipients, msg.as_string())

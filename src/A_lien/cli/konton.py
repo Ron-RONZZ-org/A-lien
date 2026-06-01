@@ -97,7 +97,9 @@ def konton_vidi(
         f"  Mot de passe: {'stocké' if has_pw else 'manquant'}",
     ))
     if account.get("subskribo"):
-        info(f"  Subskribo: {account['subskribo']}")
+        sig = service.resolve_signature(account["subskribo"])
+        sig_label = f"{sig['nomo']} ({account['subskribo'][:8]})" if sig else account["subskribo"][:8]
+        info(f"  Subskribo: {sig_label}")
 
 
 @konton.command("aldoni")
@@ -126,6 +128,14 @@ def konton_aldoni(
         587, "--smtp-port",
         help=tr_multi("SMTP haveno", "SMTP port", "Port SMTP"),
     ),
+    subskribo: str = typer.Option(
+        "", "--subskribo", "-s",
+        help=tr_multi(
+            "Apriora subskribo (nomo aŭ UUID)",
+            "Default signature (name or UUID)",
+            "Signature par défaut (nom ou UUID)",
+        ),
+    ),
     password: str = typer.Option(
         ..., "--password", "-p", prompt=True, hide_input=True,
         help=tr_multi("Konto pasvorto", "Account password", "Mot de passe"),
@@ -133,6 +143,18 @@ def konton_aldoni(
 ) -> None:
     """Add a new email account (password stored in system keyring)."""
     service = get_retposto_service()
+
+    # Validate and resolve signature if provided
+    if subskribo:
+        sig = service.resolve_signature(subskribo)
+        if not sig:
+            error(tr_multi(
+                f"Subskribo ne trovita: {subskribo}",
+                f"Signature not found: {subskribo}",
+                f"Signature introuvable: {subskribo}",
+            ))
+            raise typer.Exit(1)
+        subskribo = sig["uuid"]
 
     # Auto-fill common server patterns if not specified
     domain = retposto.split("@")[-1] if "@" in retposto else ""
@@ -156,6 +178,7 @@ def konton_aldoni(
         "imap_haveno": imap_haveno,
         "smtp_servilo": smtp_servilo,
         "smtp_haveno": smtp_haveno,
+        "subskribo": subskribo,
         "ordo": len(service.list_accounts()),
     }
 
@@ -261,6 +284,14 @@ def konton_modifi(
         0, "--smtp-port",
         help=tr_multi("SMTP haveno", "SMTP port", "Port SMTP"),
     ),
+    subskribo: str = typer.Option(
+        "", "--subskribo", "-s",
+        help=tr_multi(
+            "Apriora subskribo (nomo aŭ UUID)",
+            "Default signature (name or UUID)",
+            "Signature par défaut (nom ou UUID)",
+        ),
+    ),
     password: str = typer.Option(
         "", "--password", "-p",
         help=tr_multi("Nova pasvorto", "New password", "Nouveau mot de passe"),
@@ -272,6 +303,16 @@ def konton_modifi(
 
     # Build updates dict (only non-empty values)
     updates: dict[str, Any] = {}
+    if subskribo:
+        sig = service.resolve_signature(subskribo)
+        if not sig:
+            error(tr_multi(
+                f"Subskribo ne trovita: {subskribo}",
+                f"Signature not found: {subskribo}",
+                f"Signature introuvable: {subskribo}",
+            ))
+            raise typer.Exit(1)
+        updates["subskribo"] = sig["uuid"]
     if retposto:
         updates["retposto"] = retposto
     if nomo:

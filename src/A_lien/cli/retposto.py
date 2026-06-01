@@ -9,6 +9,7 @@ import json
 import os
 import re
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -220,6 +221,14 @@ def retposto_sendi(
         "", "--body", "-b",
         help=tr_multi("Teksto de la mesaĝo", "Body text", "Corps du texte"),
     ),
+    dosiero: str | None = typer.Option(
+        None, "--dosiero", "-D",
+        help=tr_multi(
+            "Mesaĝa korpo el dosiero (.txt, .html, .md)",
+            "Message body from file (.txt, .html, .md)",
+            "Corps du message depuis un fichier (.txt, .html, .md)",
+        ),
+    ),
     cc: str = typer.Option(
         "", "--cc",
         help=tr_multi(
@@ -237,11 +246,19 @@ def retposto_sendi(
         ),
     ),
     priority: int = typer.Option(
-        5, "--prioritato", "-p",
+        3, "--prioritato", "-p",
         help=tr_multi(
-            "Prioritato (1-5, 1=plej alta)",
-            "Priority (1-5, 1=highest)",
-            "Priorité (1-5, 1=la plus haute)",
+            "Prioritato (1-5, 3=neŭtrala)",
+            "Priority (1-5, 3=normal)",
+            "Priorité (1-5, 3=normale)",
+        ),
+    ),
+    subskribo_opt: str = typer.Option(
+        "", "--subskribo",
+        help=tr_multi(
+            "Subskribo (nomo aŭ UUID; malplena = uzu kontan aprioran)",
+            "Signature (name or UUID; empty = use account default)",
+            "Signature (nom ou UUID; vide = utiliser celle du compte)",
         ),
     ),
     account: str = typer.Option(
@@ -257,7 +274,12 @@ def retposto_sendi(
         ),
     ),
 ) -> None:
-    """Send an email."""
+    """Send an email.
+
+    Provide the message body either inline (--body/-b) or from a
+    file (--dosiero/-D), but not both. Supported file formats:
+    .txt (plain text), .html (HTML body), .md (Markdown → HTML).
+    """
     svc = get_retposto_service()
 
     if not account:
@@ -271,6 +293,54 @@ def retposto_sendi(
             raise typer.Exit(1)
         account = accounts[0]["uuid"]
 
+    # ── Resolve body from --dosiero/-D ──────────────────────────────────────
+    html_body = ""
+    if dosiero and body:
+        error(tr_multi(
+            "Donu --body AŬ --dosiero, ne ambaŭ.",
+            "Provide --body OR --dosiero, not both.",
+            "Fournissez --body OU --dosiero, pas les deux.",
+        ))
+        raise typer.Exit(1)
+    if dosiero:
+        path = Path(dosiero)
+        if not path.exists():
+            error(tr_multi(
+                f"Dosiero ne ekzistas: {dosiero}",
+                f"File not found: {dosiero}",
+                f"Fichier introuvable: {dosiero}",
+            ))
+            raise typer.Exit(1)
+        content = path.read_text(encoding="utf-8")
+        ext = path.suffix.lower()
+        if ext == ".html":
+            html_body = content
+        elif ext == ".md":
+            try:
+                from A.core.markdown_parser import render_markdown
+                html_body = render_markdown(content)
+            except ImportError:
+                warning(tr_multi(
+                    "Markdown analizilo ne havebla. Uzante simplan tekston.",
+                    "Markdown parser not available. Falling back to plain text.",
+                    "Analyseur Markdown indisponible. Texte brut utilisé.",
+                ))
+                body = content
+        else:
+            body = content
+
+    # ── Resolve signature override ─────────────────────────────────────────
+    # subskribo_opt: "" (default) → use account default (None sentinel)
+    # subskribo_opt: "name" → CLI override
+    # User can pass --subskribo " " (single space) to explicitly skip
+    subskribo: str | None = None
+    if subskribo_opt.strip() == "":
+        subskribo = None  # use account default
+    elif subskribo_opt.strip() == " ":
+        subskribo = ""    # explicit "no signature"
+    else:
+        subskribo = subskribo_opt  # CLI override
+
     recipients = [r.strip() for r in to.split(",") if r.strip()]
     cc_list = [r.strip() for r in cc.split(",") if r.strip()] if cc else None
     bcc_list = [r.strip() for r in bcc.split(",") if r.strip()] if bcc else None
@@ -281,10 +351,12 @@ def retposto_sendi(
             to=recipients,
             subject=subject,
             body=body,
+            html_body=html_body,
             cc=cc_list,
             bcc=bcc_list,
             attachments=attach or None,
             priority=priority,
+            subskribo=subskribo,
         )
         info(tr_multi(
             f"Mesaĝo sendita al {to}",

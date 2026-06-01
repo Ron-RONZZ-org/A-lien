@@ -248,6 +248,114 @@ class TestSignatures:
         assert resolved["nomo"] == uuid_like_name
 
 
+# ── Send email signature integration ─────────────────────────────────────────
+
+
+class TestSendEmailSignature:
+    """Tests for send_email signature integration."""
+
+    def _fake_smtp(self, monkeypatch, calls):
+        """Patch A_lien.smtp.SMTPClient with a fake that records calls."""
+        class FakeSMTPClient:
+            def __init__(self, *a, **kw): pass
+            def connect(self, *a, **kw): pass
+            def disconnect(self): pass
+            def send_email(self, **kw):
+                calls.append(kw)
+        monkeypatch.setattr("A_lien.smtp.SMTPClient", FakeSMTPClient)
+
+    def test_send_email_uses_account_default_signature(self, service, monkeypatch):
+        """send_email appends account's default signature when subskribo=None."""
+        svc = service
+        svc.create_signature("My Sig", "Best regards")
+        acct = svc.create_account({
+            "retposto": "user@test.com", "nomo": "Test",
+            "imap_servilo": "imap.test.com", "smtp_servilo": "smtp.test.com",
+            "subskribo": svc.find_signature_by_name("My Sig")["uuid"],
+        }, password="pw")
+
+        calls = []
+        self._fake_smtp(monkeypatch, calls)
+
+        svc.send_email(account_uuid=acct["uuid"], to=["bob@test.com"],
+                       subject="Test", body="Hello")
+        assert len(calls) == 1
+        assert "Best regards" in calls[0].get("body", "")
+
+    def test_send_email_signature_override(self, service, monkeypatch):
+        """--subskribo overrides account default signature."""
+        svc = service
+        svc.create_signature("Default Sig", "Default text")
+        svc.create_signature("Override Sig", "Override text")
+        acct = svc.create_account({
+            "retposto": "user@test.com", "nomo": "Test",
+            "imap_servilo": "imap.test.com", "smtp_servilo": "smtp.test.com",
+            "subskribo": svc.find_signature_by_name("Default Sig")["uuid"],
+        }, password="pw")
+
+        calls = []
+        self._fake_smtp(monkeypatch, calls)
+
+        svc.send_email(account_uuid=acct["uuid"], to=["bob@test.com"],
+                       subject="Test", body="Hello",
+                       subskribo="Override Sig")
+        assert len(calls) == 1
+        assert "Override text" in calls[0].get("body", "")
+        assert "Default text" not in calls[0].get("body", "")
+
+    def test_send_email_explicit_no_signature(self, service, monkeypatch):
+        """subskribo=\"\" skips the signature entirely."""
+        svc = service
+        svc.create_signature("Default Sig", "Should not appear")
+        acct = svc.create_account({
+            "retposto": "user@test.com", "nomo": "Test",
+            "imap_servilo": "imap.test.com", "smtp_servilo": "smtp.test.com",
+            "subskribo": svc.find_signature_by_name("Default Sig")["uuid"],
+        }, password="pw")
+
+        calls = []
+        self._fake_smtp(monkeypatch, calls)
+
+        svc.send_email(account_uuid=acct["uuid"], to=["bob@test.com"],
+                       subject="Test", body="Hello",
+                       subskribo="")
+        assert len(calls) == 1
+        assert "Should not appear" not in calls[0].get("body", "")
+
+    def test_send_email_html_signature(self, service, monkeypatch):
+        """HTML signature is appended to html_body."""
+        svc = service
+        svc.create_signature("HTML Sig", "<p>Sig</p>", estas_html=True)
+        acct = svc.create_account({
+            "retposto": "user@test.com", "nomo": "Test",
+            "imap_servilo": "imap.test.com", "smtp_servilo": "smtp.test.com",
+            "subskribo": svc.find_signature_by_name("HTML Sig")["uuid"],
+        }, password="pw")
+
+        calls = []
+        self._fake_smtp(monkeypatch, calls)
+
+        svc.send_email(account_uuid=acct["uuid"], to=["bob@test.com"],
+                       subject="Test", body="Hello")
+        assert len(calls) == 1
+        assert "<p>Sig</p>" in calls[0].get("html_body", "")
+
+    def test_send_email_no_account_signature(self, service, monkeypatch):
+        """Account without default signature sends normally (no error)."""
+        svc = service
+        acct = svc.create_account({
+            "retposto": "user@test.com", "nomo": "Test",
+            "imap_servilo": "imap.test.com", "smtp_servilo": "smtp.test.com",
+        }, password="pw")
+
+        calls = []
+        self._fake_smtp(monkeypatch, calls)
+
+        svc.send_email(account_uuid=acct["uuid"], to=["bob@test.com"],
+                       subject="Test", body="Hello")
+        assert len(calls) == 1
+
+
 # ── Singleton ────────────────────────────────────────────────────────────────
 
 

@@ -88,11 +88,11 @@ def retposto_respondi(
         ),
     ),
     priority: int = typer.Option(
-        5, "--prioritato", "-p",
+        3, "--prioritato", "-p",
         help=tr_multi(
-            "Prioritato (1-5, 1=plej alta)",
-            "Priority (1-5, 1=highest)",
-            "Priorité (1-5, 1=la plus haute)",
+            "Prioritato (1-5, 3=neŭtrala)",
+            "Priority (1-5, 3=normal)",
+            "Priorité (1-5, 3=normale)",
         ),
     ),
     account: str = typer.Option(
