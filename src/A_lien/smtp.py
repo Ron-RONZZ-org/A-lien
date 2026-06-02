@@ -23,11 +23,12 @@ from A.core.network import format_connection_error
 class SMTPClient:
     """Low-level SMTP operations for sending email."""
 
-    def __init__(self, host: str, port: int = 587, use_tls: bool = True):
+    def __init__(self, host: str, port: int = 587, use_tls: bool = True, use_ssl: bool = False):
         self.host = host
         self.port = port
         self.use_tls = use_tls
-        self._conn: smtplib.SMTP | None = None
+        self.use_ssl = use_ssl
+        self._conn: smtplib.SMTP | smtplib.SMTP_SSL | None = None
 
     def connect(self, username: str, password: str) -> None:
         """Connect, optionally upgrade to TLS, and login to SMTP server.
@@ -40,8 +41,11 @@ class SMTPClient:
             ConnectionError: If connection, TLS upgrade, or login fails
         """
         try:
-            self._conn = smtplib.SMTP(self.host, self.port, timeout=30)
-            self._conn.ehlo()
+            if self.use_ssl:
+                self._conn = smtplib.SMTP_SSL(self.host, self.port, timeout=30)
+            else:
+                self._conn = smtplib.SMTP(self.host, self.port, timeout=30)
+                self._conn.ehlo()
 
             if self.use_tls:
                 self._conn.starttls()
@@ -71,7 +75,7 @@ class SMTPClient:
             ) from e
 
     @property
-    def conn(self) -> smtplib.SMTP:
+    def conn(self) -> smtplib.SMTP | smtplib.SMTP_SSL:
         if self._conn is None:
             raise RuntimeError("Not connected. Call connect() first.")
         return self._conn
@@ -157,7 +161,15 @@ class SMTPClient:
             msg["Importance"] = "Normal"
 
         try:
-            self.conn.sendmail(from_addr, all_recipients, msg.as_string())
+            failed = self.conn.sendmail(from_addr, all_recipients, msg.as_string())
+            if failed:
+                raise ConnectionError(
+                    tr_multi(
+                        f"SMTP-sendo parte malsukcesis: {', '.join(failed.keys())}",
+                        f"SMTP send partially failed: {', '.join(failed.keys())}",
+                        f"Échec partiel d'envoi SMTP: {', '.join(failed.keys())}",
+                    )
+                )
         except Exception as e:
             raise ConnectionError(
                 tr_multi(

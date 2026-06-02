@@ -291,7 +291,21 @@ def retposto_sendi(
                 "Aucun compte. Ajoutez-en un d'abord.",
             ))
             raise typer.Exit(1)
-        account = accounts[0]["uuid"]
+
+        # Prefer account that matches recipient domain
+        recipient_domains = {r.split("@")[-1].lower() for r in recipients if "@" in r}
+        matched = None
+        for acct in accounts:
+            acct_email = acct.get("retposto", "").lower()
+            acct_domain = acct_email.split("@")[-1] if "@" in acct_email else ""
+            if acct_domain in recipient_domains:
+                matched = acct
+                break
+        account = (matched or accounts[0])["uuid"]
+
+    # Resolve sender email for success message
+    acct_obj = svc.get_account(account)
+    _sender_email = acct_obj.get("retposto", account[:8]) if acct_obj else account[:8]
 
     # ── Resolve body from --dosiero/-D ──────────────────────────────────────
     html_body = ""
@@ -359,9 +373,9 @@ def retposto_sendi(
             subskribo=subskribo,
         )
         info(tr_multi(
-            f"Mesaĝo sendita al {to}",
-            f"Message sent to {to}",
-            f"Message envoyé à {to}",
+            f"Mesaĝo sendita al {to} (de: {_sender_email})",
+            f"Message sent to {to} (from: {_sender_email})",
+            f"Message envoyé à {to} (de: {_sender_email})",
         ))
     except ConnectionError as e:
         error(str(e))

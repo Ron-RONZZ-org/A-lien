@@ -8,6 +8,7 @@ from __future__ import annotations
 import html
 import os
 import tempfile
+import webbrowser
 from typing import Any
 
 import typer
@@ -160,11 +161,11 @@ def retposto_vidi_mesago(
         if html_body or attachments:
             from A.core.markdown_html_view import preview_html
 
-            preview_html(
+            path = preview_html(
                 "\n".join(html_parts),
-                open_browser=True,
                 title=msg.get("subjekto", "Mesa\u011do"),
             )
+            webbrowser.open(str(path))
         return
 
     # Build email text

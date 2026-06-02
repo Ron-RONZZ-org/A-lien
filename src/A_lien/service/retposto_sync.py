@@ -195,9 +195,11 @@ class RetpostoSyncMixin:
                     body = (body + "\n\n-- \n" + sig_text) if body else sig_text
         # ───────────────────────────────────────────────────────────────────
 
+        smtp_port = acct.get("smtp_haveno", 587)
         client = SMTPClient(
-            host=acct.get("smtp_servilo", ""), port=acct.get("smtp_haveno", 587),
+            host=acct.get("smtp_servilo", ""), port=smtp_port,
             use_tls=acct.get("smtp_tls", 1) == 1,
+            use_ssl=smtp_port == 465,
         )
         try:
             client.connect(
