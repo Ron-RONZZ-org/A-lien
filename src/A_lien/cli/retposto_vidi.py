@@ -8,7 +8,6 @@ from __future__ import annotations
 import html
 import os
 import tempfile
-import webbrowser
 from typing import Any
 
 import typer
@@ -165,7 +164,11 @@ def retposto_vidi_mesago(
                 "\n".join(html_parts),
                 title=msg.get("subjekto", "Mesa\u011do"),
             )
-            webbrowser.open(str(path))
+            info(tr_multi(
+                f"HTML anta\u016drigardo: file://{path}",
+                f"HTML preview: file://{path}",
+                f"Aper\u00e7u HTML: file://{path}",
+            ))
         return
 
     # Build email text
