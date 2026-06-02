@@ -338,12 +338,25 @@ def get_db(path: Path | str | None = None) -> SQLiteDB:
     ensure_dirs()
     resolved = Path(path) if path else _path()
 
-    # Fix legacy double-.db path (old _path() returned str, causing lien.db.db)
+    # Fix legacy double-.db path (old _path() returned str, causing lien.db.db).
     # SQLiteDB with a str name appends .db → old code created "lien.db.db".
-    # If the legacy file exists and the correct path doesn't, migrate it.
+    # The legacy file may have real data while the corrected path is empty/stale.
+    # Also move WAL/SHM journals so the DB is not "malformed".
     legacy = resolved.parent / (resolved.name + ".db")
-    if legacy.exists() and not resolved.exists():
-        legacy.rename(resolved)
+    if legacy.exists():
+        legacy_size = legacy.stat().st_size
+        resolved_size = resolved.stat().st_size if resolved.exists() else 0
+        if legacy_size > resolved_size:
+            if resolved.exists():
+                resolved.unlink()
+            legacy.rename(resolved)
+            # Move WAL/SHM journals (SQLite names them <db_path>-wal and <db_path>-shm)
+            for journal_ext in ("-wal", "-shm"):
+                src = Path(str(legacy) + journal_ext)
+                if src.exists():
+                    dst = Path(str(resolved) + journal_ext)
+                    dst.unlink(missing_ok=True)
+                    src.rename(dst)
 
     db = SQLiteDB(resolved)
 

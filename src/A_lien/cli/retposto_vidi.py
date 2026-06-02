@@ -134,6 +134,13 @@ def retposto_vidi_mesago(
     """View an email by UUID or prefix (opens in editor by default)."""
     svc = get_retposto_service()
     msg = _resolve_message(svc, uuid)
+    if not msg:
+        error(tr_multi(
+            f"Mesa\u011do ne trovita: {uuid}",
+            f"Message not found: {uuid}",
+            f"Message non trouv\u00e9: {uuid}",
+        ))
+        raise typer.Exit(1)
 
     # Mark as read
     svc.mark_read(msg["uuid"])
