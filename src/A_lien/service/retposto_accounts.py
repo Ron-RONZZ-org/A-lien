@@ -109,3 +109,56 @@ class RetpostoAccountsMixin:
         if pw:
             acct["password"] = pw
         return acct
+
+    def find_by_email(self, email: str) -> dict[str, Any] | None:
+        """Find an account by its email address (exact match)."""
+        return self.db.execute_one(
+            "SELECT * FROM kontoj WHERE retposto = ?", (email,)
+        )
+
+    def resolve_account(self, identifier: str) -> dict[str, Any] | None:
+        """Resolve an account identifier to an account dict.
+
+        Tries in order:
+        1. Exact UUID match
+        2. UUID prefix match (unique)
+        3. Exact email match
+
+        Args:
+            identifier: UUID, UUID prefix, or email address.
+
+        Returns:
+            Account dict, or ``None`` if not found.
+
+        Raises:
+            typer.Exit: If multiple accounts match the identifier.
+        """
+        # 1. Exact UUID
+        acct = self.get_account(identifier)
+        if acct:
+            return acct
+
+        # 2. UUID prefix
+        matches = self.find_by_uuid_prefix(identifier)
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            from A import error as _error, tr_multi
+            _error(tr_multi(
+                f"UUID '{identifier}' kongruas kun pluraj kontoj: "
+                + ", ".join(m["retposto"] for m in matches),
+                f"UUID '{identifier}' matches multiple accounts: "
+                + ", ".join(m["retposto"] for m in matches),
+                f"L'UUID '{identifier}' correspond à plusieurs comptes: "
+                + ", ".join(m["retposto"] for m in matches),
+            ))
+            import typer
+            raise typer.Exit(1)
+
+        # 3. Email match
+        if "@" in identifier:
+            acct = self.find_by_email(identifier)
+            if acct:
+                return acct
+
+        return None

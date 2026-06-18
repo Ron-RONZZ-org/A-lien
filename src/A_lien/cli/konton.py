@@ -24,30 +24,22 @@ konton = typer.Typer(
 )
 
 
-def _resolve_account(svc: Any, uuid: str) -> dict[str, Any] | None:
-    """Resolve an account by exact UUID or prefix. Returns None if not found."""
-    account = svc.get_account(uuid)
-    if account:
-        return account
-    matches = svc.find_by_uuid_prefix(uuid)
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
+def _resolve_account(svc: Any, identifier: str) -> dict[str, Any]:
+    """Resolve an account identifier (UUID, prefix, or email).
+
+    Legacy wrapper — prefer ``svc.resolve_account()`` directly.
+
+    Raises ``typer.Exit(1)`` on failure (maintains backward compat).
+    """
+    acct = svc.resolve_account(identifier)
+    if not acct:
         error(tr_multi(
-            f"UUID '{uuid}' kongruas kun pluraj kontoj: "
-            + ", ".join(m["retposto"] for m in matches),
-            f"UUID '{uuid}' matches multiple accounts: "
-            + ", ".join(m["retposto"] for m in matches),
-            f"L'UUID '{uuid}' correspond à plusieurs comptes: "
-            + ", ".join(m["retposto"] for m in matches),
+            f"Konto ne trovita: {identifier}",
+            f"Account not found: {identifier}",
+            f"Compte non trouvé: {identifier}",
         ))
         raise typer.Exit(1)
-    error(tr_multi(
-        f"Konto ne trovita: {uuid}",
-        f"Account not found: {uuid}",
-        f"Compte non trouvé: {uuid}",
-    ))
-    raise typer.Exit(1)
+    return acct
 
 
 @konton.command("ls")

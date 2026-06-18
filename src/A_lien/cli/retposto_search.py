@@ -93,8 +93,12 @@ def retposto_serci(
         help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max"),
     ),
     account: str = typer.Option(
-        "", "--konto", "-a",
-        help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
+        "", "--konto", "-k",
+        help=tr_multi(
+            "Konto UUID, prefikso aŭ retpoŝto",
+            "Account UUID, prefix or email",
+            "UUID, préfixe ou email du compte",
+        ),
     ),
     folder: str = typer.Option(
         "", "--dosierujo", "-d",

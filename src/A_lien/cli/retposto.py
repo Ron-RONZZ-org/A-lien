@@ -113,11 +113,11 @@ def _report_sync(result: Any, account_label: str = "") -> None:
 @retposto.command("preni")
 def retposto_preni(
     account: str = typer.Option(
-        "", "--konto", "-a",
+        "", "--konto", "-k",
         help=tr_multi(
-            "Specifa konto UUID aŭ prefikso",
-            "Specific account UUID or prefix",
-            "UUID ou préfixe de compte spécifique",
+            "Specifa konto UUID, prefikso aŭ retpoŝto",
+            "Specific account UUID, prefix or email",
+            "UUID, préfixe ou email de compte spécifique",
         ),
     ),
     folder: str = typer.Option(
@@ -169,12 +169,15 @@ def retposto_preni(
         raise typer.Exit(1)
 
     if account:
-        # Single account — resolve UUID prefix
-        acct = svc.get_account(account)
+        # Single account — resolve identifier (UUID, prefix, or email)
+        acct = svc.resolve_account(account)
         if not acct:
-            from A_lien.cli.konton import _resolve_account
-
-            acct = _resolve_account(svc, account)
+            error(tr_multi(
+                f"Konto ne trovita: {account}",
+                f"Account not found: {account}",
+                f"Compte non trouvé: {account}",
+            ))
+            raise typer.Exit(1)
         email = acct.get("retposto", account[:8])
         folder_label = f" [{folder}]" if folder else ""
         info(tr_multi(
@@ -281,7 +284,18 @@ def retposto_sendi(
     """Send an email."""
     svc = get_retposto_service()
 
-    if not account:
+    if account:
+        # Resolve by UUID, prefix, or email
+        acct = svc.resolve_account(account)
+        if not acct:
+            error(tr_multi(
+                f"Konto ne trovita: {account}",
+                f"Account not found: {account}",
+                f"Compte non trouvé: {account}",
+            ))
+            raise typer.Exit(1)
+        account = acct["uuid"]
+    else:
         accounts = svc.list_accounts()
         if not accounts:
             error(tr_multi(
@@ -370,20 +384,35 @@ def retposto_sinkronigi() -> None:
 @retposto.command("dosierujoj")
 def retposto_dosierujoj(
     account: str = typer.Option(
-        ..., "--konto", "-a",
-        help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
+        ..., "--konto", "-k",
+        help=tr_multi(
+            "Konto UUID, prefikso aŭ retpoŝto",
+            "Account UUID, prefix or email",
+            "UUID, préfixe ou email du compte",
+        ),
     ),
 ) -> None:
     """List IMAP folders for an account."""
     svc = get_retposto_service()
-    acct = svc.get_account_with_password(account)
-    if not acct or "password" not in acct:
+    # Resolve identifier (UUID, prefix, or email) → account dict
+    acct = svc.resolve_account(account)
+    if not acct:
         error(tr_multi(
-            "Konto ne trovita aŭ mankas pasvorto.",
-            "Account not found or missing password.",
-            "Compte non trouvé ou mot de passe manquant.",
+            f"Konto ne trovita: {account}",
+            f"Account not found: {account}",
+            f"Compte non trouvé: {account}",
         ))
         raise typer.Exit(1)
+    # Fetch password for IMAP connection
+    pw = svc.get_password(acct["uuid"])
+    if not pw:
+        error(tr_multi(
+            f"Pasvorto mankas por konto: {acct.get('retposto', account)}",
+            f"Password missing for account: {acct.get('retposto', account)}",
+            f"Mot de passe manquant pour le compte: {acct.get('retposto', account)}",
+        ))
+        raise typer.Exit(1)
+    acct["password"] = pw
 
     client = IMAPClient(
         host=acct.get("imap_servilo", ""),
@@ -411,8 +440,12 @@ def retposto_dosierujoj(
 @retposto.command("mesagoj", hidden=True)
 def retposto_mesagoj(
     account: str = typer.Option(
-        ..., "--konto", "-a",
-        help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
+        ..., "--konto", "-k",
+        help=tr_multi(
+            "Konto UUID, prefikso aŭ retpoŝto",
+            "Account UUID, prefix or email",
+            "UUID, préfixe ou email du compte",
+        ),
     ),
     folder: str = typer.Option(
         "INBOX", "--dosierujo", "-f",

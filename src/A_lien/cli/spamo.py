@@ -26,14 +26,10 @@ spamo_app = typer.Typer(
 
 def _sync_and_report(svc, account_uuid: str) -> None:
     """Attempt Sieve sync with user-facing messages. Non-fatal on failure."""
-    # Check account has Sieve configured (try prefix match if needed)
-    acct = svc.get_account(account_uuid)
+    # Resolve account by UUID, prefix, or email
+    acct = svc.resolve_account(account_uuid)
     if not acct:
-        from A_lien.cli.konton import _resolve_account
-        try:
-            acct = _resolve_account(svc, account_uuid)
-        except typer.Exit:
-            return
+        return
 
     if not acct.get("sieve_servilo"):
         warning(tr_multi(
