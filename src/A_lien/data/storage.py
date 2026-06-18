@@ -13,6 +13,8 @@ Design decisions:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from A.core.paths import data_dir
 from A.core.paths import ensure_dirs as _ensure_dirs
 from A.core.backup_targets import BackupTarget

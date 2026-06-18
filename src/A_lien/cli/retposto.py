@@ -282,6 +282,11 @@ def retposto_sendi(
     """
     svc = get_retposto_service()
 
+    # Parse recipients early — needed both for account matching and sending
+    recipients = [r.strip() for r in to.split(",") if r.strip()]
+    cc_list = [r.strip() for r in cc.split(",") if r.strip()] if cc else None
+    bcc_list = [r.strip() for r in bcc.split(",") if r.strip()] if bcc else None
+
     if not account:
         accounts = svc.list_accounts()
         if not accounts:
@@ -354,10 +359,6 @@ def retposto_sendi(
         subskribo = ""    # explicit "no signature"
     else:
         subskribo = subskribo_opt  # CLI override
-
-    recipients = [r.strip() for r in to.split(",") if r.strip()]
-    cc_list = [r.strip() for r in cc.split(",") if r.strip()] if cc else None
-    bcc_list = [r.strip() for r in bcc.split(",") if r.strip()] if bcc else None
 
     try:
         svc.send_email(

@@ -130,6 +130,14 @@ def retposto_vidi_mesago(
         False, "--html", "-H",
         help=tr_multi("Montri HTML en retumilo", "Show HTML in browser", "Afficher HTML dans le navigateur"),
     ),
+    stdout: bool = typer.Option(
+        False, "--stdout",
+        help=tr_multi(
+            "Presi tekston al stdout anstata\u016d malfermi redaktilon",
+            "Print text to stdout instead of opening an editor",
+            "Imprimer le texte sur stdout au lieu d'ouvrir un \u00e9diteur",
+        ),
+    ),
 ) -> None:
     """View an email by UUID or prefix (opens in editor by default)."""
     svc = get_retposto_service()
@@ -210,18 +218,21 @@ def retposto_vidi_mesago(
 
     email_text = "\n".join(lines)
 
-    # Open in editor or print
-    editor = os.environ.get("EDITOR", "less")
-    if editor in ("less", "more") or "-" in editor:
+    # Print to stdout or open in editor
+    if stdout:
         info(email_text)
     else:
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".txt", delete=False, encoding="utf-8"
-        ) as f:
-            f.write(email_text)
-            temp_path = f.name
-        try:
-            os.system(f"{editor} {temp_path}")
-        finally:
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
+        editor = os.environ.get("EDITOR", "less")
+        if editor in ("less", "more") or "-" in editor:
+            info(email_text)
+        else:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".txt", delete=False, encoding="utf-8"
+            ) as f:
+                f.write(email_text)
+                temp_path = f.name
+            try:
+                os.system(f"{editor} {temp_path}")
+            finally:
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)

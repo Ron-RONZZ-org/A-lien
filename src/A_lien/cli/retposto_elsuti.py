@@ -9,7 +9,7 @@ from typing import Optional
 
 import typer
 
-from A import error, info, tr_multi
+from A import confirm_action, error, info, tr_multi
 from A_lien.cli.retposto_message_ops import _resolve_message
 from A_lien.service import get_retposto_service
 
@@ -104,7 +104,7 @@ def retposto_elsuti(
 
     # Confirmation gate for large/many downloads
     if len(attachments) > 3 or total_mb > 10:
-        confirmed = typer.confirm(
+        confirmed = confirm_action(
             tr_multi(
                 "\u0108u da\u016drigi?",
                 "Continue?",
