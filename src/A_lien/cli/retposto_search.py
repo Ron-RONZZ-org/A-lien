@@ -14,6 +14,28 @@ from A import error, info, tr_multi
 from A_lien.service import get_retposto_service
 
 
+def _format_results(results: list[dict]) -> list[str]:
+    """Format search results as a list of text lines, including folder name."""
+    lines: list[str] = [
+        tr_multi(
+            f"Trovitaj {len(results)} mesaĝo(j):",
+            f"Found {len(results)} message(s):",
+            f"{len(results)} message(s) trouvé(s):",
+        ),
+    ]
+    for m in results:
+        read_indicator = (
+            tr_multi("legita", "read", "lu")
+            if m.get("legita")
+            else tr_multi("nelegita", "unread", "non lu")
+        )
+        folder = m.get("dosierujo_nomo", "") or ""
+        preview = (m.get("subjekto", "") or "(sen temo)")[:50]
+        folder_part = f" [{folder}]" if folder else ""
+        lines.append(f"  {m['uuid'][:8]}  {read_indicator}{folder_part}: {preview}")
+    return lines
+
+
 def retposto_serci(
     query: str = typer.Argument(
         "", help=tr_multi("Serĉa teksto", "Search text", "Texte de recherche")
@@ -74,6 +96,14 @@ def retposto_serci(
         "", "--konto", "-a",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
+    folder: str = typer.Option(
+        "", "--dosierujo", "-d",
+        help=tr_multi(
+            "Dosieruja nomo (ekz. INBOX, Sent, Junk)",
+            "Folder name (e.g. INBOX, Sent, Junk)",
+            "Nom du dossier (p. ex. INBOX, Sent, Junk)",
+        ),
+    ),
 ) -> None:
     """Search emails with filters."""
     svc = get_retposto_service()
@@ -105,6 +135,8 @@ def retposto_serci(
         filters["priority"] = priority
     if account:
         filters["account"] = account
+    if folder:
+        filters["folder"] = folder
 
     results = svc.search_messages(filters, limit=limit)
 
@@ -116,20 +148,9 @@ def retposto_serci(
         ))
         return
 
-    info(tr_multi(
-        f"Trovitaj {len(results)} mesaĝo(j):",
-        f"Found {len(results)} message(s):",
-        f"{len(results)} message(s) trouvé(s):",
-    ))
-
-    for m in results:
-        read_indicator = (
-            tr_multi("legita", "read", "lu")
-            if m.get("legita")
-            else tr_multi("nelegita", "unread", "non lu")
-        )
-        preview = (m.get("subjekto", "") or "(sen temo)")[:50]
-        info(f"  {m['uuid'][:8]}  {read_indicator}: {preview}")
+    lines = _format_results(results)
+    for line in lines:
+        info(line)
 
 
-__all__ = ["retposto_serci"]
+__all__ = ["retposto_serci", "_format_results"]

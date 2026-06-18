@@ -120,6 +120,14 @@ def retposto_preni(
             "UUID ou préfixe de compte spécifique",
         ),
     ),
+    folder: str = typer.Option(
+        "", "--dosierujo", "-f",
+        help=tr_multi(
+            "Dosieruja nomo (ekz. INBOX; postulas --konto)",
+            "Folder name (e.g. INBOX; requires --konto)",
+            "Nom du dossier (p. ex. INBOX; nécessite --konto)",
+        ),
+    ),
     force: bool = typer.Option(
         False, "--deviga", "-d",
         help=tr_multi(
@@ -141,6 +149,7 @@ def retposto_preni(
 
     By default syncs all accounts with passwords.
     Use --konto to sync a single account (by UUID or prefix).
+    Use --dosierujo with --konto to sync only a specific folder.
     Use --deviga to re-download all messages (not just new ones).
     """
     # Enable IMAP debug logging globally
@@ -150,6 +159,15 @@ def retposto_preni(
 
     svc = get_retposto_service()
 
+    # --dosierujo without --konto is invalid
+    if folder and not account:
+        error(tr_multi(
+            "--dosierujo postulas --konto",
+            "--dosierujo requires --konto",
+            "--dosierujo nécessite --konto",
+        ))
+        raise typer.Exit(1)
+
     if account:
         # Single account — resolve UUID prefix
         acct = svc.get_account(account)
@@ -158,13 +176,16 @@ def retposto_preni(
 
             acct = _resolve_account(svc, account)
         email = acct.get("retposto", account[:8])
+        folder_label = f" [{folder}]" if folder else ""
         info(tr_multi(
-            f"Prenas mesaĝojn el {email}...",
-            f"Fetching messages from {email}...",
-            f"Récupération depuis {email}...",
+            f"Prenas mesaĝojn el {email}{folder_label}...",
+            f"Fetching messages from {email}{folder_label}...",
+            f"Récupération depuis {email}{folder_label}...",
         ))
         try:
-            result = svc.sync_account(acct["uuid"], force=force)
+            folders_arg = [folder] if folder else None
+            result = svc.sync_account(acct["uuid"], force=force,
+                                      folders=folders_arg)
             _report_sync(result, account_label=email)
         except ConnectionError as e:
             error(str(e))

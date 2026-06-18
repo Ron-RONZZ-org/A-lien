@@ -106,8 +106,16 @@ class RetpostoSyncMixin:
         """Insert or update a message in mesagoj table."""
         return store_message(self.db, data, force=force)
 
-    def sync_account(self, uuid: str, force: bool = False) -> Any:
-        """Sync messages for a single account."""
+    def sync_account(self, uuid: str, force: bool = False,
+                     folders: list[str] | None = None) -> Any:
+        """Sync messages for a single account.
+
+        Args:
+            uuid: Account UUID.
+            force: Re-download all messages if True.
+            folders: If given, only sync these folder names (e.g. ``["INBOX"]``).
+                     If None, sync all discovered folders.
+        """
         from A_lien.imap import sync_account as _sync
         acct = self.get_account_with_password(uuid)
         if not acct or "password" not in acct:
@@ -117,6 +125,7 @@ class RetpostoSyncMixin:
             use_ssl=acct.get("imap_ssl", 1) == 1,
             username=acct.get("imap_uzantonomo", "") or acct.get("retposto", ""),
             password=acct["password"], konto_id=uuid, db_store=self, force=force,
+            folders=folders,
         )
         backlog_count = self.process_sync_backlog()
         if backlog_count > 0:

@@ -69,55 +69,72 @@ class RetpostoMessagingMixin:
     def search_messages(
         self, filters: dict[str, Any], limit: int = 50
     ) -> list[dict[str, Any]]:
-        """Search messages with filters."""
+        """Search messages with filters.
+
+        Returns messages with an extra ``dosierujo_nomo`` key containing
+        the folder display name (or empty string if unknown).
+        """
         conditions = []
         params = []
         if filters.get("query"):
-            conditions.append("(subjekto LIKE ? OR korpo LIKE ?)")
+            conditions.append("(m.subjekto LIKE ? OR m.korpo LIKE ?)")
             q = f"%{filters['query']}%"
             params.extend([q, q])
         if filters.get("from"):
-            conditions.append("de LIKE ?")
+            conditions.append("m.de LIKE ?")
             params.append(f"%{filters['from']}%")
         if filters.get("to"):
-            conditions.append("al LIKE ?")
+            conditions.append("m.al LIKE ?")
             params.append(f"%{filters['to']}%")
         if filters.get("cc"):
-            conditions.append("kc LIKE ?")
+            conditions.append("m.kc LIKE ?")
             params.append(f"%{filters['cc']}%")
         if filters.get("bcc"):
-            conditions.append("bkc LIKE ?")
+            conditions.append("m.bkc LIKE ?")
             params.append(f"%{filters['bcc']}%")
         if filters.get("subject"):
-            conditions.append("subjekto LIKE ?")
+            conditions.append("m.subjekto LIKE ?")
             params.append(f"%{filters['subject']}%")
         if filters.get("body"):
-            conditions.append("korpo LIKE ?")
+            conditions.append("m.korpo LIKE ?")
             params.append(f"%{filters['body']}%")
         if filters.get("after"):
-            conditions.append("ricevita_je >= ?")
+            conditions.append("m.ricevita_je >= ?")
             params.append(filters["after"])
         if filters.get("before"):
-            conditions.append("ricevita_je <= ?")
+            conditions.append("m.ricevita_je <= ?")
             params.append(filters["before"])
         if filters.get("read") is not None:
-            conditions.append("legita = ?")
+            conditions.append("m.legita = ?")
             params.append(1 if filters["read"] else 0)
         if filters.get("priority"):
-            conditions.append("prioritato = ?")
+            conditions.append("m.prioritato = ?")
             params.append(filters["priority"])
         if filters.get("account"):
-            conditions.append("konto_id = ?")
+            conditions.append("m.konto_id = ?")
             params.append(filters["account"])
-        if conditions:
-            where = " AND ".join(conditions)
-            sql = f"SELECT * FROM mesagoj WHERE {where} AND forigita = 0 ORDER BY ricevita_je DESC LIMIT ?"
-        else:
-            sql = "SELECT * FROM mesagoj WHERE forigita = 0 ORDER BY ricevita_je DESC LIMIT ?"
+        if filters.get("folder"):
+            conditions.append(
+                "m.dosierujo_id IN (SELECT uuid FROM dosierujoj WHERE nomo = ?)"
+            )
+            params.append(filters["folder"])
+        base_where = " AND ".join(conditions) if conditions else "1"
+        sql = (
+            "SELECT m.*, COALESCE(d.nomo, '') AS dosierujo_nomo"
+            " FROM mesagoj m"
+            " LEFT JOIN dosierujoj d ON m.dosierujo_id = d.uuid"
+            f" WHERE {base_where} AND m.forigita = 0"
+            " ORDER BY m.ricevita_je DESC LIMIT ?"
+        )
         params.append(limit)
         try:
             rows = self.db.execute(sql, tuple(params))
         except Exception:
-            sql = "SELECT * FROM mesagoj WHERE forigita = 0 ORDER BY ricevita_je DESC LIMIT ?"
-            rows = self.db.execute(sql, (limit,))
+            fallback_sql = (
+                "SELECT m.*, '' AS dosierujo_nomo"
+                " FROM mesagoj m"
+                " WHERE m.forigita = 0"
+                " ORDER BY m.ricevita_je DESC LIMIT ?"
+            )
+            rows = self.db.execute(fallback_sql, (limit,))
         return list(rows)
