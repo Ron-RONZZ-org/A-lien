@@ -198,6 +198,7 @@ class TestSMTPClient:
         """Send a simple plain-text email."""
         with patch("A_lien.smtp.smtplib.SMTP") as mock:
             mock_instance = MagicMock()
+            mock_instance.sendmail.return_value = {}  # empty dict = success
             mock.return_value = mock_instance
             client = SMTPClient("smtp.test.com", 587)
             client.connect("user@test.com", "pw")
@@ -216,6 +217,7 @@ class TestSMTPClient:
         """Send with CC includes CC recipients."""
         with patch("A_lien.smtp.smtplib.SMTP") as mock:
             mock_instance = MagicMock()
+            mock_instance.sendmail.return_value = {}
             mock.return_value = mock_instance
             client = SMTPClient("smtp.test.com", 587)
             client.connect("user@test.com", "pw")
@@ -237,6 +239,7 @@ class TestSMTPClient:
 
         with patch("A_lien.smtp.smtplib.SMTP") as mock:
             mock_instance = MagicMock()
+            mock_instance.sendmail.return_value = {}
             mock.return_value = mock_instance
             client = SMTPClient("smtp.test.com", 587)
             client.connect("user@test.com", "pw")

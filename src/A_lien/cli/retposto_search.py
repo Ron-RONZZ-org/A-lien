@@ -6,7 +6,7 @@ This function is registered on the retposto typer from retposto.py.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 import typer
 
@@ -37,8 +37,12 @@ def _format_results(results: list[dict]) -> list[str]:
 
 
 def retposto_serci(
-    query: str = typer.Argument(
-        "", help=tr_multi("Serĉa teksto", "Search text", "Texte de recherche")
+    query: list[str] = typer.Argument(
+        [], help=tr_multi(
+            "Serĉa teksto (pluraj vortoj aŭtomate kunigitaj)",
+            "Search text (multiple words joined automatically)",
+            "Texte de recherche (plusieurs mots joints automatiquement)",
+        ),
     ),
     from_addr: str = typer.Option(
         "", "--from", "-f",
@@ -108,13 +112,22 @@ def retposto_serci(
             "Nom du dossier (p. ex. INBOX, Sent, Junk)",
         ),
     ),
+    output: Optional[str] = typer.Option(
+        None, "--output", "-o",
+        help=tr_multi(
+            "Eliga dosiero (anstataŭ stdout)",
+            "Output file (instead of stdout)",
+            "Fichier de sortie (au lieu de stdout)",
+        ),
+    ),
 ) -> None:
     """Search emails with filters."""
     svc = get_retposto_service()
 
     filters: dict[str, Any] = {}
-    if query:
-        filters["query"] = query
+    query_str = " ".join(query) if query else ""
+    if query_str:
+        filters["query"] = query_str
     if from_addr:
         filters["from"] = from_addr
     if to:
@@ -142,6 +155,17 @@ def retposto_serci(
     if folder:
         filters["folder"] = folder
 
+    # Warn if query looks like it contains shell redirect operators
+    if query_str and any(op in query_str for op in (">", "<")):
+        info(tr_multi(
+            "Noto: la serĉa teksto enhavas '>' aŭ '<'. "
+            "Se vi volis redirekti eligon, uzu --output.",
+            "Note: search text contains '>' or '<'. "
+            "If you wanted to redirect output, use --output.",
+            "Remarque: le texte de recherche contient '>' ou '<'. "
+            "Pour rediriger la sortie, utilisez --output.",
+        ))
+
     results = svc.search_messages(filters, limit=limit)
 
     if not results:
@@ -153,8 +177,18 @@ def retposto_serci(
         return
 
     lines = _format_results(results)
-    for line in lines:
-        info(line)
+
+    if output:
+        from pathlib import Path
+        Path(output).write_text("\n".join(lines) + "\n", encoding="utf-8")
+        info(tr_multi(
+            f"Rezultoj skribitaj al {output}",
+            f"Results written to {output}",
+            f"Résultats écrits dans {output}",
+        ))
+    else:
+        for line in lines:
+            info(line)
 
 
 __all__ = ["retposto_serci", "_format_results"]

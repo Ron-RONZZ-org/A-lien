@@ -75,7 +75,7 @@ def store_message(db: Any, data: dict[str, Any], force: bool = False) -> str:
             aldonajxoj, etikedoj, ricevita_je,
             kreita_je, modifita_je)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (msg_uuid, data.get("konto_id", ""), data.get("dosierujo_id", ""),
+        (msg_uuid, data.get("konto_id", ""), data.get("dosierujo_id", "") or None,
          data.get("message_id", ""), data.get("in_reply_to", ""),
          data.get("references_hdr", ""), data.get("imap_uid"),
          data.get("de", ""), data.get("al", "[]"), data.get("kc", "[]"),
@@ -152,21 +152,63 @@ class RetpostoSyncMixin:
     def send_email(
         self, account_uuid: str, to: list[str], subject: str, body: str = "",
         cc: list[str] | None = None, bcc: list[str] | None = None,
-        attachments: list[str] | None = None, priority: int = 5,
+        attachments: list[str] | None = None, priority: int = 3,
         in_reply_to: str = "", references: str = "",
+        html_body: str = "",
+        subskribo: str | None = None,
     ) -> None:
-        """Send an email via SMTP."""
+        """Send an email via SMTP.
+
+        Args:
+            account_uuid: Account to send from
+            to: Primary recipients
+            subject: Email subject
+            body: Plain text body
+            cc: Carbon copy recipients
+            bcc: Blind carbon copy recipients
+            attachments: File paths to attach
+            priority: Priority level (1=highest, 5=lowest, 3=normal)
+            in_reply_to: Message-ID being replied to
+            references: References header for threading
+            html_body: Optional HTML body (alternative to plain text)
+            subskribo: Signature override.
+                None = use account default (kontoj.subskribo)
+                ""  = explicit "no signature"
+                otherwise = name or UUID to resolve
+        """
         from A_lien.smtp import SMTPClient
         from A_lien.imap import should_autosave_contact
+
         acct = self.get_account_with_password(account_uuid)
         if not acct or "password" not in acct:
             raise ValueError(f"No password for account: {account_uuid}")
         sender_email = acct.get("retposto", "")
         cc = cc or []
         bcc = bcc or []
+
+        # ── Resolve signature ──────────────────────────────────────────────
+        if subskribo is None:
+            sig_uuid = acct.get("subskribo") or ""
+        elif subskribo == "":
+            sig_uuid = ""  # explicit skip
+        else:
+            sig_uuid = subskribo  # CLI override
+
+        if sig_uuid:
+            sig = self.resolve_signature(sig_uuid)
+            if sig:
+                sig_text = sig.get("teksto", "")
+                if sig.get("estas_html"):
+                    html_body = (html_body or "") + "<br>" + sig_text
+                else:
+                    body = (body + "\n\n-- \n" + sig_text) if body else sig_text
+        # ───────────────────────────────────────────────────────────────────
+
+        smtp_port = acct.get("smtp_haveno", 587)
         client = SMTPClient(
-            host=acct.get("smtp_servilo", ""), port=acct.get("smtp_haveno", 587),
+            host=acct.get("smtp_servilo", ""), port=smtp_port,
             use_tls=acct.get("smtp_tls", 1) == 1,
+            use_ssl=smtp_port == 465,
         )
         try:
             client.connect(
@@ -175,10 +217,12 @@ class RetpostoSyncMixin:
             )
             client.send_email(
                 from_addr=sender_email, to=to, subject=subject, body=body,
-                cc=cc, bcc=bcc, attachments=attachments or [], priority=priority,
+                cc=cc, bcc=bcc, attachments=attachments or [],
+                html_body=html_body, priority=priority,
             )
         finally:
             client.disconnect()
+
         all_recipients = to + cc + bcc
         for addr in all_recipients:
             if should_autosave_contact(addr):
@@ -191,7 +235,7 @@ class RetpostoSyncMixin:
             "de": sender_email, "al": json.dumps(to, ensure_ascii=False),
             "kc": json.dumps(cc, ensure_ascii=False),
             "bkc": json.dumps(bcc, ensure_ascii=False),
-            "subjekto": subject, "korpo": body, "html_korpo": "",
+            "subjekto": subject, "korpo": body, "html_korpo": html_body,
             "prioritato": priority, "legita": 1, "stelo": 0, "spamo": 0, "forigita": 0,
             "aldonajxoj": "[]", "etikedoj": "[]",
             "ricevita_je": now, "kreita_je": now, "modifita_je": now,

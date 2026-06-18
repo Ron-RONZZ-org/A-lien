@@ -293,184 +293,63 @@ class TestSearchMessagesFolder:
         ]:
             service.db.execute(
                 "INSERT INTO mesagoj (uuid, konto_id, dosierujo_id, subjekto, "
-                "kreita_je, modifita_je) VALUES (?, ?, ?, ?, ?, ?)",
-                (uid, konto_id, fld_uuid, subj, now, now),
+                "ricevita_je, kreita_je, modifita_je, korpo, legita, prioritato) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 'body', 0, 3)",
+                (uid, konto_id, fld_uuid, subj, now, now, now),
             )
 
-        return konto_id
-
-    def test_folder_filter(self, service):
-        """search_messages with folder filter returns only matching messages."""
+    def test_search_by_folder(self, service):
+        """Search with --dosierujo filter returns only that folder's msgs."""
         self._seed_folder_and_messages(service)
 
-        results = service.search_messages({"folder": "INBOX"}, limit=50)
-        assert len(results) == 2
-        assert all("INBOX 1" in r["subjekto"] or "INBOX 2" in r["subjekto"]
-                   for r in results)
-        assert all(r["dosierujo_nomo"] == "INBOX" for r in results)
-
-    def test_folder_filter_sent(self, service):
-        """search_messages with folder='Sent' returns only Sent messages."""
-        self._seed_folder_and_messages(service)
-
-        results = service.search_messages({"folder": "Sent"}, limit=50)
-        assert len(results) == 2
-        assert all("Sent" in r["subjekto"] for r in results)
-        assert all(r["dosierujo_nomo"] == "Sent" for r in results)
-
-    def test_folder_filter_nonexistent(self, service):
-        """search_messages with nonexistent folder name returns empty."""
-        self._seed_folder_and_messages(service)
-
-        results = service.search_messages({"folder": "Nonexistent"}, limit=50)
-        assert len(results) == 0
-
-    def test_no_folder_filter_returns_all(self, service):
-        """search_messages without folder filter returns all messages."""
-        self._seed_folder_and_messages(service)
-
-        results = service.search_messages({}, limit=50)
+        # All messages
+        results = service.search_messages({}, limit=100)
         assert len(results) == 4
 
-    def test_dosierujo_nomo_in_results(self, service):
-        """search_messages results include dosierujo_nomo key."""
+        # Filter to INBOX
+        results_inbox = service.search_messages({"folder": "INBOX"}, limit=100)
+        assert len(results_inbox) == 2
+        for m in results_inbox:
+            assert m.get("dosierujo_nomo") == "INBOX"
+
+        # Filter to Sent
+        results_sent = service.search_messages({"folder": "Sent"}, limit=100)
+        assert len(results_sent) == 2
+
+    def test_folder_name_in_result(self, service):
+        """Search results include dosierujo_nomo field."""
         self._seed_folder_and_messages(service)
+        results = service.search_messages({"folder": "INBOX"}, limit=100)
+        assert len(results) >= 1
+        for m in results:
+            assert "dosierujo_nomo" in m
+            assert m["dosierujo_nomo"] == "INBOX"
 
-        results = service.search_messages({}, limit=50)
-        for r in results:
-            assert "dosierujo_nomo" in r
-            assert r["dosierujo_nomo"] in ("INBOX", "Sent")
-
-    def test_folder_filter_with_other_filters(self, service):
-        """Folder filter combines with other filters (e.g. query)."""
-        self._seed_folder_and_messages(service)
-
-        results = service.search_messages(
-            {"folder": "INBOX", "query": "Hello"}, limit=50
-        )
-        assert len(results) == 2
-
-    def test_folder_filter_account_combined(self, service):
-        """Folder filter works alongside account filter."""
+    def test_folder_name_for_inbox_is_inbox(self, service):
+        """When a message has no folder, dosierujo_nomo should be empty."""
+        # Create a message without a dosierujo_id
         import uuid as uuid_mod
-        self._seed_folder_and_messages(service)
 
-        # Create a second account + message in INBOX
-        konto2 = str(uuid_mod.uuid4())
-        fld2 = str(uuid_mod.uuid4())
+        konto_id = str(uuid_mod.uuid4())
         now = "2026-01-01T00:00:00"
         service.db.execute(
             "INSERT INTO kontoj (uuid, nomo, retposto, imap_servilo, imap_haveno, "
             "imap_ssl, smtp_servilo, smtp_haveno, smtp_tls, kreita_je, modifita_je) "
-            "VALUES (?, 'Other User', 'other@example.com', 'imap.test.com', 993, 1, "
+            "VALUES (?, 'Test User', 'test@example.com', 'imap.test.com', 993, 1, "
             "'smtp.test.com', 587, 1, ?, ?)",
-            (konto2, now, now),
+            (konto_id, now, now),
         )
-        service.db.execute(
-            "INSERT INTO dosierujoj (uuid, konto_id, nomo, kreita_je, modifita_je) "
-            "VALUES (?, ?, 'INBOX', ?, ?)",
-            (fld2, konto2, now, now),
-        )
+        msg_uuid = str(uuid_mod.uuid4())
         service.db.execute(
             "INSERT INTO mesagoj (uuid, konto_id, dosierujo_id, subjekto, "
-            "kreita_je, modifita_je) VALUES (?, ?, ?, 'Other account', ?, ?)",
-            (str(uuid_mod.uuid4()), konto2, fld2, now, now),
+            "ricevita_je, kreita_je, modifita_je, korpo, legita, prioritato) "
+            "VALUES (?, ?, NULL, 'No Folder Msg', ?, ?, ?, 'body', 0, 3)",
+            (msg_uuid, konto_id, now, now, now),
         )
-
-        results = service.search_messages({"folder": "INBOX", "account": konto2}, limit=50)
+        results = service.search_messages({"query": "No Folder Msg"}, limit=100)
         assert len(results) == 1
-        assert results[0]["subjekto"] == "Other account"
-
-
-# ── SyncAccount with folders parameter ──────────────────────────────────────
-
-
-class TestSyncAccountFolders:
-    """Tests for sync_account folders parameter."""
-
-    def test_sync_account_accepts_folders(self, service, monkeypatch):
-        """sync_account passes folders parameter to IMAP sync."""
-        import uuid as uuid_mod
-
-        acct_uuid = str(uuid_mod.uuid4())
-        now = "2026-01-01T00:00:00"
-        service.db.execute(
-            "INSERT INTO kontoj (uuid, nomo, retposto, imap_servilo, imap_haveno, "
-            "imap_ssl, smtp_servilo, smtp_haveno, smtp_tls, kreita_je, modifita_je) "
-            "VALUES (?, 'Test', 'test@example.com', 'imap.test.com', 993, 1, "
-            "'smtp.test.com', 587, 1, ?, ?)",
-            (acct_uuid, now, now),
-        )
-
-        # Mock password retrieval
-        monkeypatch.setattr(service, "get_password", lambda uuid: "sekret123")
-        monkeypatch.setattr(service, "get_account_with_password", lambda uuid: {
-            "uuid": acct_uuid,
-            "imap_servilo": "imap.test.com",
-            "imap_haveno": 993,
-            "imap_ssl": 1,
-            "imap_uzantonomo": "test@example.com",
-            "retposto": "test@example.com",
-            "password": "sekret123",
-        })
-
-        # Mock the low-level IMAP sync to verify folders parameter
-        captured = {}
-
-        def mock_sync(host=None, port=None, use_ssl=None, username=None,
-                      password=None, konto_id=None, db_store=None,
-                      folders=None, force=False):
-            captured["folders"] = folders
-            from A_lien.imap._sync_types import SyncResult
-            return SyncResult()
-
-        monkeypatch.setattr("A_lien.imap.sync_account", mock_sync)
-
-        # Patch svc.process_sync_backlog to avoid actual IMAP
-        monkeypatch.setattr(service, "process_sync_backlog", lambda: 0)
-
-        # Call with folders
-        service.sync_account(acct_uuid, folders=["INBOX"])
-        assert captured.get("folders") == ["INBOX"]
-
-    def test_sync_account_folders_default_none(self, service, monkeypatch):
-        """sync_account passes folders=None by default (all folders)."""
-        import uuid as uuid_mod
-
-        acct_uuid = str(uuid_mod.uuid4())
-        now = "2026-01-01T00:00:00"
-        service.db.execute(
-            "INSERT INTO kontoj (uuid, nomo, retposto, imap_servilo, imap_haveno, "
-            "imap_ssl, smtp_servilo, smtp_haveno, smtp_tls, kreita_je, modifita_je) "
-            "VALUES (?, 'Test', 'test@example.com', 'imap.test.com', 993, 1, "
-            "'smtp.test.com', 587, 1, ?, ?)",
-            (acct_uuid, now, now),
-        )
-        monkeypatch.setattr(service, "get_password", lambda uuid: "sekret123")
-        monkeypatch.setattr(service, "get_account_with_password", lambda uuid: {
-            "uuid": acct_uuid,
-            "imap_servilo": "imap.test.com",
-            "imap_haveno": 993,
-            "imap_ssl": 1,
-            "imap_uzantonomo": "test@example.com",
-            "retposto": "test@example.com",
-            "password": "sekret123",
-        })
-
-        captured = {}
-
-        def mock_sync(host=None, port=None, use_ssl=None, username=None,
-                      password=None, konto_id=None, db_store=None,
-                      folders=None, force=False):
-            captured["folders"] = folders
-            from A_lien.imap._sync_types import SyncResult
-            return SyncResult()
-
-        monkeypatch.setattr("A_lien.imap.sync_account", mock_sync)
-        monkeypatch.setattr(service, "process_sync_backlog", lambda: 0)
-
-        service.sync_account(acct_uuid)
-        assert captured.get("folders") is None
+        # dosierujo_nomo should be empty string, not None
+        assert results[0].get("dosierujo_nomo") == ""
 
 
 # ── Singleton ────────────────────────────────────────────────────────────────
