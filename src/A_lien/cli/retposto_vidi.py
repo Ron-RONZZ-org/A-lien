@@ -17,6 +17,24 @@ from A_lien.cli.retposto_message_ops import _resolve_message
 from A_lien.service import get_retposto_service
 
 
+def _lookup_folder_name(svc: Any, dosierujo_id: str) -> str:
+    """Look up folder display name by its UUID.
+
+    Args:
+        svc: RetpostoService instance.
+        dosierujo_id: Folder UUID from the message.
+
+    Returns:
+        Folder name or empty string if not found.
+    """
+    if not dosierujo_id:
+        return ""
+    row = svc.db.execute_one(
+        "SELECT nomo FROM dosierujoj WHERE uuid = ?", (dosierujo_id,)
+    )
+    return row["nomo"] if row else ""
+
+
 def _format_size(size: int) -> str:
     """Format byte count to human-readable string."""
     if size > 1024 * 1024:
@@ -64,7 +82,7 @@ def _build_attachments_html(attachments: list[dict[str, Any]]) -> str:
 def _build_metadata_html(msg: dict[str, Any]) -> str:
     """Build an HTML metadata header for email message.
 
-    Renders From, To, Subject, Date, Priority, and Read status
+    Renders From, To, Subject, Date, Priority, Read status, and Folder
     as a styled panel above the message body in HTML view.
 
     Args:
@@ -97,6 +115,10 @@ def _build_metadata_html(msg: dict[str, Any]) -> str:
         (
             tr_multi("Stato:", "Status:", "\u00c9tat:"),
             read_label if legita else unread_label,
+        ),
+        (
+            tr_multi("Dosierujo:", "Folder:", "Dossier:"),
+            str(msg.get("dosierujo_nomo", "") or ""),
         ),
     ]
     for label, value in fields:
@@ -135,6 +157,10 @@ def retposto_vidi_mesago(
     svc = get_retposto_service()
     msg = _resolve_message(svc, uuid)
 
+    # Enrich message with folder display name
+    if "dosierujo_nomo" not in msg or not msg["dosierujo_nomo"]:
+        msg["dosierujo_nomo"] = _lookup_folder_name(svc, msg.get("dosierujo_id", ""))
+
     # Mark as read
     svc.mark_read(msg["uuid"])
 
@@ -168,6 +194,8 @@ def retposto_vidi_mesago(
         return
 
     # Build email text
+    raw_nomo = msg.get("dosierujo_nomo", "") or ""
+    folder_label = raw_nomo or _lookup_folder_name(svc, msg.get("dosierujo_id", ""))
     lines = [
         f"From: {msg.get('de', '')}",
         f"To: {msg.get('al', '')}",
@@ -175,6 +203,7 @@ def retposto_vidi_mesago(
         f"Date: {msg.get('ricevita_je', '')}",
         f"Priority: {msg.get('prioritato', 5)}",
         f"Read: {'Yes' if msg.get('legita') else 'No'}",
+        f"Folder: {folder_label}",
         "-" * 40,
         "",
     ]

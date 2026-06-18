@@ -13,6 +13,8 @@ Design decisions:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from A.core.paths import data_dir
 from A.core.paths import ensure_dirs as _ensure_dirs
 from A.core.backup_targets import BackupTarget
@@ -316,9 +318,9 @@ KONTAKTOJ_FTS_CONFIG = FTSConfig(
 # ── Database initialization ──────────────────────────────────────────────────
 
 
-def _path() -> str:
+def _path() -> Path:
     """Get database path using A.core.paths."""
-    return str(data_dir() / "lien.db")
+    return data_dir() / "lien.db"
 
 
 def ensure_dirs() -> None:
@@ -326,7 +328,7 @@ def ensure_dirs() -> None:
     _ensure_dirs()
 
 
-def get_db(path: str | None = None) -> SQLiteDB:
+def get_db(path: Path | str | None = None) -> SQLiteDB:
     """Get database connection with all tables created and migrations applied.
 
     Args:
@@ -336,7 +338,8 @@ def get_db(path: str | None = None) -> SQLiteDB:
         SQLiteDB instance with schema + migrations applied
     """
     ensure_dirs()
-    db = SQLiteDB(path or _path())
+    resolved = Path(path) if path else _path()
+    db = SQLiteDB(resolved)
 
     for stmt in _SCHEMA_STATEMENTS:
         db.execute(stmt)

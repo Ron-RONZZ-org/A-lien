@@ -195,7 +195,7 @@ class TestMigrate:
         from A.data.base import SQLiteDB
         from A_lien.data.storage import _SCHEMA_STATEMENTS
 
-        db_path = str(tmp_path / "test_pre_migrate.db")
+        db_path = tmp_path / "test_pre_migrate.db"
         db = SQLiteDB(db_path)
         for stmt in _SCHEMA_STATEMENTS:
             db.execute(stmt)
@@ -234,7 +234,7 @@ class TestMigrate:
         from A.data.base import SQLiteDB
 
         # Build a legacy mesagoj table (old schema with uid TEXT)
-        db_path = str(tmp_path / "test_legacy.db")
+        db_path = tmp_path / "test_legacy.db"
         db = SQLiteDB(db_path)
         db.execute("""
             CREATE TABLE IF NOT EXISTS mesagoj (
@@ -278,7 +278,7 @@ class TestMigrate:
         # Now run get_db() — this should NOT crash (the bug)
         from A_lien.data.storage import get_db
 
-        db2 = get_db(str(tmp_path / "test_legacy.db"))
+        db2 = get_db(tmp_path / "test_legacy.db")
 
         # Verify the new column exists
         cols = {
