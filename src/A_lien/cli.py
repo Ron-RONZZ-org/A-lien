@@ -523,13 +523,13 @@ def retposto_serci(
     bcc: str = typer.Option("", "--bcc", help=tr_multi("SKK", "BCC", "BCC")),
     subject: str = typer.Option("", "--subject", "-s", help=tr_multi("Temeto", "Subject", "Sujet")),
     body: str = typer.Option("", "--body", "-b", help=tr_multi("Korpo", "Body", "Corps")),
-    after: str = typer.Option("", "--after", help=tr_multi("Post dato (YYYYMMDD)", "After date (YYYYMMDD)", "Après date (YYYYMMDD)")),
-    before: str = typer.Option("", "--before", help=tr_multi("Antaŭ dato (YYYYMMDD)", "Before date (YYYYMMDD)", "Avant date (YYYYMMDD)")),
-    read: bool = typer.Option(False, "--read", help=tr_multi("Legita", "Read", "Lu")),
-    unread: bool = typer.Option(False, "--unread", help=tr_multi("Nelegita", "Unread", "Non lu")),
-    priority: int = typer.Option(0, "--priority", "-p", help=tr_multi("Prioritato (1-5)", "Priority (1-5)", "Priorité (1-5)")),
-    limit: int = typer.Option(50, "--limit", "-l", help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max")),
-    account: str = typer.Option("", "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    after: str = typer.Option("", "--post", help=tr_multi("Post dato (YYYYMMDD)", "After date (YYYYMMDD)", "Après date (YYYYMMDD)")),
+    before: str = typer.Option("", "--antaux", help=tr_multi("Antaŭ dato (YYYYMMDD)", "Before date (YYYYMMDD)", "Avant date (YYYYMMDD)")),
+    read: bool = typer.Option(False, "--legita", help=tr_multi("Legita", "Read", "Lu")),
+    unread: bool = typer.Option(False, "--nelegita", help=tr_multi("Nelegita", "Unread", "Non lu")),
+    priority: int = typer.Option(0, "--prioritato", "-p", help=tr_multi("Prioritato (1-5)", "Priority (1-5)", "Priorité (1-5)")),
+    limit: int = typer.Option(50, "--limo", "-l", help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max")),
+    account: str = typer.Option("", "--konto", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
 ) -> None:
     """Search emails with filters."""
     import json
@@ -589,7 +589,7 @@ def retposto_serci(
 
 @retposto.command("dosierujoj")
 def retposto_dosierujoj(
-    account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    account: str = typer.Option(..., "--konto", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
 ) -> None:
     """List IMAP folders for an account."""
     svc = get_retposto_service()
@@ -625,9 +625,9 @@ def retposto_dosierujoj(
 
 @retposto.command("mesagxoj", hidden=True)
 def retposto_mesagxoj(
-    account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
-    folder: str = typer.Option("INBOX", "--folder", "-f", help=tr_multi("Dosieruja nomo", "Folder name", "Nom du dossier")),
-    limit: int = typer.Option(20, "--limit", "-l", help=tr_multi("Maksimumaj mesaĝoj", "Max messages", "Messages max")),
+    account: str = typer.Option(..., "--konto", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    folder: str = typer.Option("INBOX", "--dosierujo", "-f", help=tr_multi("Dosieruja nomo", "Folder name", "Nom du dossier")),
+    limit: int = typer.Option(20, "--limo", "-l", help=tr_multi("Maksimumaj mesaĝoj", "Max messages", "Messages max")),
 ) -> None:
     """[DEPRECATED] Use 'A lien retposto serci' instead."""
     warning(tr_multi(
@@ -762,7 +762,7 @@ retposto.add_typer(filtraj_app, name="filtraj")
 
 @filtraj_app.command("ls")
 def filtraj_ls(
-    account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    account: str = typer.Option(..., "--konto", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
 ) -> None:
     """List Sieve scripts on the server."""
     try:
@@ -788,7 +788,7 @@ def filtraj_ls(
 
 @filtraj_app.command("vidi")
 def filtraj_vidi(
-    account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    account: str = typer.Option(..., "--konto", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
     name: str = typer.Argument(..., help=tr_multi("Skripta nomo", "Script name", "Nom du script")),
 ) -> None:
     """View a Sieve script from the server."""
@@ -807,10 +807,10 @@ def filtraj_vidi(
 
 @filtraj_app.command("aldoni")
 def filtraj_aldoni(
-    account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    account: str = typer.Option(..., "--konto", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
     path: str = typer.Argument(..., help=tr_multi("Vojo al .sieve dosiero", "Path to .sieve file", "Chemin vers fichier .sieve")),
-    name: str = typer.Option("", "--name", "-n", help=tr_multi("Skripta nomo (defaŭlte: dosiernomo)", "Script name (default: filename)", "Nom du script (défaut: nom de fichier)")),
-    activate: bool = typer.Option(False, "--activate", help=tr_multi("Agordi kiel aktiva post alŝuto", "Set as active after upload", "Définir comme actif après téléchargement")),
+    name: str = typer.Option("", "--nomo", "-n", help=tr_multi("Skripta nomo (defaŭlte: dosiernomo)", "Script name (default: filename)", "Nom du script (défaut: nom de fichier)")),
+    activate: bool = typer.Option(False, "--aktivigi", help=tr_multi("Agordi kiel aktiva post alŝuto", "Set as active after upload", "Définir comme actif après téléchargement")),
 ) -> None:
     """Upload a Sieve script (validates syntax locally first)."""
     from pathlib import Path as _Path
@@ -863,7 +863,7 @@ def filtraj_aldoni(
 
 @filtraj_app.command("forigi")
 def filtraj_forigi(
-    account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    account: str = typer.Option(..., "--konto", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
     name: str = typer.Argument(..., help=tr_multi("Skripta nomo", "Script name", "Nom du script")),
 ) -> None:
     """Delete a Sieve script from the server."""
@@ -884,7 +884,7 @@ def filtraj_forigi(
 
 @filtraj_app.command("aktivi")
 def filtraj_aktivi(
-    account: str = typer.Option(..., "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    account: str = typer.Option(..., "--konto", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
     name: str = typer.Argument(..., help=tr_multi("Skripta nomo", "Script name", "Nom du script")),
 ) -> None:
     """Set a Sieve script as active."""
@@ -913,11 +913,11 @@ Valid contact fields (JSON):
 
 @kontakto.command("ls")
 def kontakto_ls(
-    limit: int = typer.Option(50, "--limit", "-l", help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max")),
+    limit: int = typer.Option(50, "--limo", "-l", help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max")),
     order_by: str = typer.Option(
-        "plena_nomo", "--order", "-o", help=tr_multi("Ordiga kolumno", "Sort column", "Colonne de tri")
+        "plena_nomo", "--ordo", "-o", help=tr_multi("Ordiga kolumno", "Sort column", "Colonne de tri")
     ),
-    desc: bool = typer.Option(False, "--desc", "-d", help=tr_multi("Malkreska ordo", "Descending order", "Ordre décroissant")),
+    desc: bool = typer.Option(False, "--descenda", "-d", help=tr_multi("Malkreska ordo", "Descending order", "Ordre décroissant")),
 ) -> None:
     """List all contacts."""
     from A.utils.output import print_table
@@ -957,7 +957,7 @@ def kontakto_ls(
 def kontakto_serci(
     query: str = typer.Argument(..., help=tr_multi("Serĉa teksto", "Search text", "Texte de recherche")),
     fuzzy: bool = typer.Option(False, "--fuzzy", "-f", help=tr_multi("Ŝalti fuzzy kongruigon", "Enable fuzzy matching", "Activer correspondance floue")),
-    limit: int = typer.Option(50, "--limit", "-l", help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max")),
+    limit: int = typer.Option(50, "--limo", "-l", help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max")),
 ) -> None:
     """Search contacts using full-text search."""
     service = get_kontakto_service()
@@ -1223,7 +1223,7 @@ def kontakto_modifi(
 @kontakto.command("forigi")
 def kontakto_forigi(
     uuid: str = typer.Argument(..., help=tr_multi("Kontakto UUID", "Contact UUID", "UUID contact")),
-    permanent: bool = typer.Option(False, "--permanent", "-P", help=tr_multi("Definitiva forigo", "Permanent delete", "Suppression permanente")),
+    permanent: bool = typer.Option(False, "--permanenta", "-P", help=tr_multi("Definitiva forigo", "Permanent delete", "Suppression permanente")),
 ) -> None:
     """Delete a contact (soft-delete by default)."""
     service = get_kontakto_service()
@@ -1280,7 +1280,7 @@ def kontakto_importi(
 @kontakto.command("eksporti")
 def kontakto_eksporti(
     uuid: str = typer.Option("", "--uuid", "-u", help=tr_multi("Eksporti unu kontakton", "Export single contact", "Exporter un contact")),
-    output: str = typer.Option("", "--output", "-o", help=tr_multi("Eliga dosiera vojo", "Output file path", "Chemin de sortie")),
+    output: str = typer.Option("", "--eligo", "-o", help=tr_multi("Eliga dosiera vojo", "Output file path", "Chemin de sortie")),
 ) -> None:
     """Export contacts to VCF format."""
     service = get_kontakto_service()

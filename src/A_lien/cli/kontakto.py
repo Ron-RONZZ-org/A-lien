@@ -62,11 +62,11 @@ def kontakto_ls(
         help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max"),
     ),
     order_by: str = typer.Option(
-        "plena_nomo", "--order", "-o",
+        "plena_nomo", "--ordo", "-o",
         help=tr_multi("Ordiga kolumno", "Sort column", "Colonne de tri"),
     ),
     desc: bool = typer.Option(
-        False, "--desc", "-d",
+        False, "--descenda", "-d",
         help=tr_multi("Malkreska ordo", "Descending order", "Ordre décroissant"),
     ),
 ) -> None:

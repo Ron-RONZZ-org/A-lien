@@ -95,7 +95,7 @@ def filtraj_aldoni(
         ),
     ),
     name: str = typer.Option(
-        "", "--name", "-n",
+        "", "--nomo", "-n",
         help=tr_multi(
             "Skripta nomo (defaŭlte: dosiernomo)",
             "Script name (default: filename)",
@@ -103,7 +103,7 @@ def filtraj_aldoni(
         ),
     ),
     activate: bool = typer.Option(
-        False, "--activate",
+        False, "--aktivigi",
         help=tr_multi(
             "Agordi kiel aktiva post alŝuto",
             "Set as active after upload",

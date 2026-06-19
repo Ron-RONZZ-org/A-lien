@@ -309,7 +309,7 @@ def kontakto_forigi(
         ),
     )],
     permanent: bool = typer.Option(
-        False, "--permanent", "-P",
+        False, "--permanenta", "-P",
         help=tr_multi("Definitiva forigo", "Permanent delete", "Suppression permanente"),
     ),
 ) -> None:
