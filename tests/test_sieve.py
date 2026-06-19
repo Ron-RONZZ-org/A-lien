@@ -104,7 +104,7 @@ class TestSieveManager:
         manager = SieveManager("sieve.test.com", 4190)
         manager.connect("user", "password")
         mock_cls.assert_called_once_with("sieve.test.com", 4190, use_tls=True)
-        mock_inst.login.assert_called_once_with("user", "password")
+        mock_inst.login.assert_called_once_with("", "user", "password")
 
     def test_connect_failure(self):
         """Connection error raises ConnectionError."""
