@@ -55,6 +55,45 @@ def _is_text_mime(mime: str) -> bool:
     return False
 
 
+# Binary MIME types that we can extract text from (via optional A-papero).
+_EXTRACTABLE_BINARY_MIMES: frozenset[str] = frozenset({
+    "application/pdf",
+})
+
+
+def _is_extractable_binary(mime: str) -> bool:
+    """Check whether a binary MIME type supports text extraction.
+
+    Currently supported: PDF (requires ``A-papero[pdf]`` installed).
+
+    Args:
+        mime: The MIME type string.
+
+    Returns:
+        True if text extraction is possible with optional dependencies.
+    """
+    return mime.strip().lower() in _EXTRACTABLE_BINARY_MIMES
+
+
+def _try_extract_pdf_text(data: bytes) -> str | None:
+    """Try to extract text from PDF bytes using A-papero (optional dependency).
+
+    Attempts a runtime import from ``A_papero.formats.pdf``.  If A-papero
+    is not installed, returns ``None`` — the caller should suggest installing it.
+
+    Args:
+        data: Raw PDF bytes.
+
+    Returns:
+        Extracted text, or ``None`` if A-papero is unavailable.
+    """
+    try:
+        from A_papero.formats.pdf import read_pdf_bytes
+    except ImportError:
+        return None
+    return read_pdf_bytes(data)
+
+
 def _fmt_size(size: int) -> str:
     """Format byte count to human-readable string."""
     if size > 1024 * 1024:
@@ -113,6 +152,17 @@ def _print_text_attachment(svc: object, msg_uuid: str, att: dict) -> None:
         return
 
     # Truncation guard: if content is huge, print first and last N chars
+    _print_content_block(fname, raw, text)
+
+
+def _print_content_block(fname: str, raw: bytes, text: str) -> None:
+    """Print a content block with header and optional truncation.
+
+    Args:
+        fname: Attachment filename for the header.
+        raw: Raw bytes (for size calculation).
+        text: Decoded text content.
+    """
     MAX_STDOUT_CHARS = 50_000
     if len(text) > MAX_STDOUT_CHARS:
         info(f"--- {fname} ({_fmt_size(len(raw))}) — {tr_multi('montras unuajn', 'showing first', 'affiche les premiers')} {MAX_STDOUT_CHARS} {tr_multi('signojn', 'chars', 'caractères')} ---")
@@ -121,6 +171,48 @@ def _print_text_attachment(svc: object, msg_uuid: str, att: dict) -> None:
     else:
         info(f"--- {fname} ({_fmt_size(len(raw))}) ---")
         info(text)
+
+
+def _print_extracted_attachment(svc: object, msg_uuid: str, att: dict) -> None:
+    """Fetch an extractable-binary attachment (e.g. PDF) and print its text.
+
+    Requires ``A-papero[pdf]`` at runtime.  If unavailable, prints an
+    installation hint instead.
+
+    Args:
+        svc: RetpostoService instance.
+        msg_uuid: Message UUID.
+        att: Attachment metadata dict.
+    """
+    fname = att.get("dosiernomo", "?")
+    mime = att.get("mime_tipo", "") or "application/octet-stream"
+
+    try:
+        raw: bytes = svc.get_attachment_content(msg_uuid, fname)  # type: ignore[arg-type]
+    except Exception as e:
+        info(tr_multi(
+            f"  [eraro] {fname}: {e}",
+            f"  [error] {fname}: {e}",
+            f"  [erreur] {fname} : {e}",
+        ))
+        return
+
+    text = _try_extract_pdf_text(raw)
+    if text is None:
+        # A-papero not installed
+        info(tr_multi(
+            f"--- {fname} ({mime}) ---",
+            f"--- {fname} ({mime}) ---",
+            f"--- {fname} ({mime}) ---",
+        ))
+        info(tr_multi(
+            "Por eltiri tekston el PDF, instalu: pip install A-papero[pdf]",
+            "To extract text from PDF, install: pip install A-papero[pdf]",
+            "Pour extraire le texte du PDF, installez : pip install A-papero[pdf]",
+        ))
+        return
+
+    _print_content_block(fname, raw, text)
 
 
 # ── Main command ─────────────────────────────────────────────────────────────
@@ -201,6 +293,8 @@ def retposto_elsuti(
             mime = att.get("mime_tipo", "") or "application/octet-stream"
             if _is_text_mime(mime):
                 _print_text_attachment(svc, msg["uuid"], att)
+            elif _is_extractable_binary(mime):
+                _print_extracted_attachment(svc, msg["uuid"], att)
             else:
                 info(tr_multi(
                     f"[binary] {filename} ({mime}) — ne eblas montri kiel teksto; uzu --output por konservi",
@@ -211,6 +305,7 @@ def retposto_elsuti(
 
         # All attachments in stdout mode
         text_count = 0
+        extracted_count = 0
         binary_count = 0
         for att in attachments:
             fname = att.get("dosiernomo", "?")
@@ -218,6 +313,9 @@ def retposto_elsuti(
             if _is_text_mime(mime):
                 _print_text_attachment(svc, msg["uuid"], att)
                 text_count += 1
+            elif _is_extractable_binary(mime):
+                _print_extracted_attachment(svc, msg["uuid"], att)
+                extracted_count += 1
             else:
                 info(tr_multi(
                     f"--- {fname} ({mime}) — [binary] ne montrebla kiel teksto ---",
@@ -231,6 +329,12 @@ def retposto_elsuti(
                 f"Montris {text_count} tekstan(j)n aldona\u0135o(j)n.",
                 f"Displayed {text_count} text attachment(s).",
                 f"{text_count} pi\u00e8ce(s) jointe(s) texte affich\u00e9e(s).",
+            ))
+        if extracted_count:
+            info(tr_multi(
+                f"Elsutis tekston el {extracted_count} aldona\u0135o(j) (PDF).",
+                f"Extracted text from {extracted_count} attachment(s) (PDF).",
+                f"Texte extrait de {extracted_count} pi\u00e8ce(s) jointe(s) (PDF).",
             ))
         if binary_count:
             info(tr_multi(
