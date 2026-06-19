@@ -234,7 +234,7 @@ def retposto_elsuti(
         ),
     ),
     output_dir: Optional[str] = typer.Option(
-        None, "--output", "-o",
+        None, "--eligo", "-o",
         help=tr_multi(
             "Konserva dosierujo (default: /tmp/)",
             "Output directory (default: /tmp/)",

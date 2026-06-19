@@ -58,7 +58,7 @@ kontakto.add_typer(kategorio_app, name="kategorio")
 @kontakto.command("ls")
 def kontakto_ls(
     limit: int = typer.Option(
-        50, "--limit", "-l",
+        50, "--limo", "-l",
         help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max"),
     ),
     order_by: str = typer.Option(
@@ -122,7 +122,7 @@ def kontakto_serci(
         help=tr_multi("Ŝalti fuzzy kongruigon", "Enable fuzzy matching", "Activer correspondance floue"),
     ),
     limit: int = typer.Option(
-        50, "--limit", "-l",
+        50, "--limo", "-l",
         help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max"),
     ),
 ) -> None:

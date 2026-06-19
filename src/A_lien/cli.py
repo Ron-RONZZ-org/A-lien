@@ -136,11 +136,11 @@ def konton_vidi(
 def konton_aldoni(
     retposto: str = typer.Option(..., "--retposto", "-r", help=tr_multi("Retpoŝta adreso", "Email address", "Adresse email")),
     nomo: str = typer.Option("", "--nomo", "-n", help=tr_multi("Vidiga nomo", "Display name", "Nom d'affichage")),
-    imap_servilo: str = typer.Option("", "--imap-server", help=tr_multi("IMAP servilo", "IMAP server", "Serveur IMAP")),
-    imap_haveno: int = typer.Option(993, "--imap-port", help=tr_multi("IMAP haveno", "IMAP port", "Port IMAP")),
-    smtp_servilo: str = typer.Option("", "--smtp-server", help=tr_multi("SMTP servilo", "SMTP server", "Serveur SMTP")),
-    smtp_haveno: int = typer.Option(587, "--smtp-port", help=tr_multi("SMTP haveno", "SMTP port", "Port SMTP")),
-    password: str = typer.Option(..., "--password", "-p", prompt=True, hide_input=True, help=tr_multi("Konto pasvorto", "Account password", "Mot de passe")),
+    imap_servilo: str = typer.Option("", "--imap-servilo", help=tr_multi("IMAP servilo", "IMAP server", "Serveur IMAP")),
+    imap_haveno: int = typer.Option(993, "--imap-pordo", help=tr_multi("IMAP haveno", "IMAP port", "Port IMAP")),
+    smtp_servilo: str = typer.Option("", "--smtp-servilo", help=tr_multi("SMTP servilo", "SMTP server", "Serveur SMTP")),
+    smtp_haveno: int = typer.Option(587, "--smtp-pordo", help=tr_multi("SMTP haveno", "SMTP port", "Port SMTP")),
+    password: str = typer.Option(..., "--pasvorto", "-p", prompt=True, hide_input=True, help=tr_multi("Konto pasvorto", "Account password", "Mot de passe")),
 ) -> None:
     """Add a new email account (password stored in system keyring)."""
     service = get_retposto_service()
@@ -198,7 +198,7 @@ def konton_forigi(
     )],
     force: bool = typer.Option(
         False,
-        "--force",
+        "--deviga",
         "-f",
         help=tr_multi(
             "Forigi sen konfirmo",
@@ -247,11 +247,11 @@ def konton_modifi(
     uuid: str = typer.Argument(..., help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
     retposto: str = typer.Option("", "--retposto", "-r", help=tr_multi("Retpoŝta adreso", "Email address", "Adresse email")),
     nomo: str = typer.Option("", "--nomo", "-n", help=tr_multi("Vidiga nomo", "Display name", "Nom d'affichage")),
-    imap_servilo: str = typer.Option("", "--imap-server", help=tr_multi("IMAP servilo", "IMAP server", "Serveur IMAP")),
-    imap_haveno: int = typer.Option(0, "--imap-port", help=tr_multi("IMAP haveno", "IMAP port", "Port IMAP")),
-    smtp_servilo: str = typer.Option("", "--smtp-server", help=tr_multi("SMTP servilo", "SMTP server", "Serveur SMTP")),
-    smtp_haveno: int = typer.Option(0, "--smtp-port", help=tr_multi("SMTP haveno", "SMTP port", "Port SMTP")),
-    password: str = typer.Option("", "--password", "-p", help=tr_multi("Nova pasvorto", "New password", "Nouveau mot de passe")),
+    imap_servilo: str = typer.Option("", "--imap-servilo", help=tr_multi("IMAP servilo", "IMAP server", "Serveur IMAP")),
+    imap_haveno: int = typer.Option(0, "--imap-pordo", help=tr_multi("IMAP haveno", "IMAP port", "Port IMAP")),
+    smtp_servilo: str = typer.Option("", "--smtp-servilo", help=tr_multi("SMTP servilo", "SMTP server", "Serveur SMTP")),
+    smtp_haveno: int = typer.Option(0, "--smtp-pordo", help=tr_multi("SMTP haveno", "SMTP port", "Port SMTP")),
+    password: str = typer.Option("", "--pasvorto", "-p", help=tr_multi("Nova pasvorto", "New password", "Nouveau mot de passe")),
 ) -> None:
     """Modify an existing email account."""
     service = get_retposto_service()
@@ -339,11 +339,11 @@ def retposto_vidi(uuid: str = typer.Argument(..., help="Account UUID")) -> None:
 def retposto_aldoni_konton(
     retposto: str = typer.Option(..., "--retposto", "-r", help="Email address"),
     nomo: str = typer.Option("", "--nomo", "-n", help="Display name"),
-    imap_servilo: str = typer.Option("", "--imap-server", help="IMAP server"),
-    imap_haveno: int = typer.Option(993, "--imap-port", help="IMAP port"),
-    smtp_servilo: str = typer.Option("", "--smtp-server", help="SMTP server"),
-    smtp_haveno: int = typer.Option(587, "--smtp-port", help="SMTP port"),
-    password: str = typer.Option(..., "--password", "-p", prompt=True, hide_input=True, help="Account password"),
+    imap_servilo: str = typer.Option("", "--imap-servilo", help="IMAP server"),
+    imap_haveno: int = typer.Option(993, "--imap-pordo", help="IMAP port"),
+    smtp_servilo: str = typer.Option("", "--smtp-servilo", help="SMTP server"),
+    smtp_haveno: int = typer.Option(587, "--smtp-pordo", help="SMTP port"),
+    password: str = typer.Option(..., "--pasvorto", "-p", prompt=True, hide_input=True, help="Account password"),
 ) -> None:
     """[DEPRECATED] Use 'A lien retposto konton aldoni' instead."""
     konton_aldoni(retposto, nomo, imap_servilo, imap_haveno, smtp_servilo, smtp_haveno, password)
@@ -359,8 +359,8 @@ def retposto_forigi_konton(
 
 @retposto.command("preni")
 def retposto_preni(
-    account: str = typer.Option("", "--account", "-a", help=tr_multi("Specifa konto UUID", "Specific account UUID", "UUID compte spécifique")),
-    all_accounts: bool = typer.Option(False, "--all", help=tr_multi("Sinkronigi ĉiujn kontojn", "Sync all accounts", "Synchroniser tous les comptes")),
+    account: str = typer.Option("", "--konto", "-a", help=tr_multi("Specifa konto UUID", "Specific account UUID", "UUID compte spécifique")),
+    all_accounts: bool = typer.Option(False, "--chiuj", help=tr_multi("Sinkronigi ĉiujn kontojn", "Sync all accounts", "Synchroniser tous les comptes")),
 ) -> None:
     """Fetch mail from accounts."""
     svc = get_retposto_service()
@@ -415,8 +415,8 @@ def retposto_sendi(
     subject: str = typer.Option("", "--subject", "-s", help=tr_multi("Temeto", "Subject", "Sujet")),
     body: str = typer.Option("", "--body", "-b", help=tr_multi("Teksto de la mesaĝo", "Body text", "Corps du texte")),
     cc: str = typer.Option("", "--cc", help=tr_multi("KK (punktokomo-separita)", "CC (comma-separated)", "CC (séparé par;)")),
-    account: str = typer.Option("", "--account", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
-    attach: list[str] = typer.Option([], "--attach", help=tr_multi("Dosiero algluenda", "File to attach", "Fichier à joindre")),
+    account: str = typer.Option("", "--konto", "-a", help=tr_multi("Konto UUID", "Account UUID", "UUID compte")),
+    attach: list[str] = typer.Option([], "--alglui", help=tr_multi("Dosiero algluenda", "File to attach", "Fichier à joindre")),
 ) -> None:
     """Send an email."""
     svc = get_retposto_service()

@@ -87,7 +87,7 @@ def spamo_aldoni(
         ),
     ),
     account: str = typer.Option(
-        "", "--account", "-a",
+        "", "--konto", "-a",
         help=tr_multi(
             "Konto UUID por Sieve-sinkronigo",
             "Account UUID for Sieve sync",
@@ -135,7 +135,7 @@ def spamo_forigi(
         ),
     )],
     account: str = typer.Option(
-        "", "--account", "-a",
+        "", "--konto", "-a",
         help=tr_multi(
             "Konto UUID por Sieve-sinkronigo",
             "Account UUID for Sieve sync",
@@ -175,7 +175,7 @@ def spamo_forigi(
 @spamo_app.command("sinkronigi")
 def spamo_sinkronigi(
     account: str = typer.Option(
-        ..., "--account", "-a",
+        ..., "--konto", "-a",
         help=tr_multi(
             "Konto UUID por Sieve-sinkronigo",
             "Account UUID for Sieve sync",
