@@ -27,7 +27,7 @@ filtraj_app = typer.Typer(
 @filtraj_app.command("ls")
 def filtraj_ls(
     account: str = typer.Option(
-        ..., "--konto", "-a",
+        ..., "--konto", "-k",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
 ) -> None:
@@ -60,7 +60,7 @@ def filtraj_ls(
 @filtraj_app.command("vidi")
 def filtraj_vidi(
     account: str = typer.Option(
-        ..., "--konto", "-a",
+        ..., "--konto", "-k",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
     name: str = typer.Argument(
@@ -81,10 +81,14 @@ def filtraj_vidi(
         info(f"  {line}")
 
 
-@filtraj_app.command("aldoni")
+@filtraj_app.command("aldoni", help=tr_multi(
+    "Validumas sintakson loke, poste alŝutas Sieve-skripton al servilo",
+    "Validates syntax locally, then uploads Sieve script to server",
+    "Valide la syntaxe localement, puis télécharge le script Sieve",
+))
 def filtraj_aldoni(
     account: str = typer.Option(
-        ..., "--konto", "-a",
+        ..., "--konto", "-k",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
     path: str = typer.Argument(
@@ -162,7 +166,7 @@ def filtraj_aldoni(
 @filtraj_app.command("forigi")
 def filtraj_forigi(
     account: str = typer.Option(
-        ..., "--konto", "-a",
+        ..., "--konto", "-k",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
     name: str = typer.Argument(
@@ -188,7 +192,7 @@ def filtraj_forigi(
 @filtraj_app.command("aktivi")
 def filtraj_aktivi(
     account: str = typer.Option(
-        ..., "--konto", "-a",
+        ..., "--konto", "-k",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
     name: str = typer.Argument(

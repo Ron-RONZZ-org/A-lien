@@ -101,13 +101,27 @@ class RetpostoAccountsMixin:
         return self.list(order_by="ordo", desc=False)
 
     def get_account_with_password(self, uuid: str) -> dict[str, Any] | None:
-        """Get account config with password from keyring."""
+        """Get account config with password from keyring.
+
+        Returns the account dict with ``"password"`` key, or ``None`` if
+        the account does not exist **or** the password cannot be retrieved
+        from the system keyring.  Callers can use a simple truthy check::
+
+            acct = svc.get_account_with_password(uuid)
+            if not acct:
+                # account missing or no password available
+                ...
+
+        Returns:
+            Account dict with a ``"password"`` key, or ``None``.
+        """
         acct = self.get_account(uuid)
         if acct is None:
             return None
         pw = self.get_password(uuid)
-        if pw:
-            acct["password"] = pw
+        if not pw:
+            return None
+        acct["password"] = pw
         return acct
 
     def find_by_email(self, email: str) -> dict[str, Any] | None:

@@ -87,9 +87,14 @@ class TestSieveManager:
 
     @pytest.fixture
     def mock_mclient(self):
-        """Mock the managesieve.MANAGESIEVE class at package level."""
+        """Mock the managesieve.MANAGESIEVE class at package level.
+
+        The mock instance's ``login()`` returns ``"OK"`` by default so
+        that the connect check passes; individual tests can override.
+        """
         with patch("managesieve.MANAGESIEVE") as mock:
             mock_instance = MagicMock()
+            mock_instance.login.return_value = "OK"
             mock.return_value = mock_instance
             yield mock, mock_instance
 

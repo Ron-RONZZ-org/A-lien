@@ -38,7 +38,7 @@ class RetpostoMessageOpsMixin:
         if not konto_id:
             return
         acct = self.get_account_with_password(konto_id)
-        if not acct or "password" not in acct:
+        if not acct:
             self._enqueue_sync(msg)
             return
         imap_uid = msg.get("imap_uid")
@@ -111,7 +111,7 @@ class RetpostoMessageOpsMixin:
         synced = 0
         for konto_id, items in by_account.items():
             acct = self.get_account_with_password(konto_id)
-            if not acct or "password" not in acct:
+            if not acct:
                 continue
             from A_lien.imap._message_ops import set_flags
             from A_lien.imap.client import IMAPClient
@@ -182,10 +182,14 @@ class RetpostoMessageOpsMixin:
         src_account_uuid = msg.get("konto_id", "")
         src_account = self.get_account_with_password(src_account_uuid)
         dest_account = self.get_account_with_password(dest_account_uuid)
-        if not src_account or "password" not in src_account:
-            raise ValueError(f"Source account {src_account_uuid[:8]} has no password")
-        if not dest_account or "password" not in dest_account:
-            raise ValueError(f"Destination account {dest_account_uuid[:8]} has no password")
+        if not src_account:
+            raise ValueError(
+                f"No password configured for source account {src_account_uuid[:8]}"
+            )
+        if not dest_account:
+            raise ValueError(
+                f"No password configured for destination account {dest_account_uuid[:8]}"
+            )
         from A_lien.imap._message_ops import (
             append_message, delete_message, fetch_raw_message, move_message,
         )
@@ -273,8 +277,10 @@ class RetpostoMessageOpsMixin:
         if not imap_uid:
             raise ValueError(f"Message {msg_uuid[:8]} has no IMAP UID")
         acct = self.get_account_with_password(konto_id)
-        if not acct or "password" not in acct:
-            raise ValueError(f"Account {konto_id[:8]} has no password")
+        if not acct:
+            raise ValueError(
+                f"No password configured for account {konto_id[:8]}"
+            )
         folder_row = self.db.execute_one(
             "SELECT nomo FROM dosierujoj WHERE uuid = ?",
             (msg.get("dosierujo_id", ""),),
@@ -357,8 +363,10 @@ class RetpostoMessageOpsMixin:
         if not imap_uid:
             raise ValueError(f"Message {msg_uuid[:8]} has no IMAP UID")
         acct = self.get_account_with_password(konto_id)
-        if not acct or "password" not in acct:
-            raise ValueError(f"Account {konto_id[:8]} has no password")
+        if not acct:
+            raise ValueError(
+                f"No password configured for account {konto_id[:8]}"
+            )
         folder_row = self.db.execute_one(
             "SELECT nomo FROM dosierujoj WHERE uuid = ?",
             (msg.get("dosierujo_id", ""),),

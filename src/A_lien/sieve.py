@@ -69,12 +69,23 @@ class SieveManager:
         try:
             from managesieve import MANAGESIEVE as SieveClient
             self._client = SieveClient(self.host, self.port, use_tls=self.use_tls)
-            self._client.login(username, password)
+            login_ok = self._client.login(username, password)
+            if login_ok != "OK":
+                reason = self._client.response_text or login_ok
+                raise ConnectionError(
+                    tr_multi(
+                        f"Sieve-ensaluto malsukcesis por {username}: {reason}",
+                        f"Sieve login failed for {username}: {reason}",
+                        f"Échec de connexion Sieve pour {username}: {reason}",
+                    )
+                )
         except (socket.gaierror, ConnectionRefusedError,
                 TimeoutError, socket.timeout, ssl.SSLError, OSError) as e:
             raise ConnectionError(
                 format_connection_error(e, self.host, self.port, "Sieve")
             ) from e
+        except ConnectionError:
+            raise
         except Exception as e:
             raise ConnectionError(
                 tr_multi(
@@ -180,14 +191,17 @@ class SieveManager:
 # ── Convenience: connect from account ────────────────────────────────────────
 
 
-def get_sieve_manager(account_uuid: str) -> SieveManager:
+def get_sieve_manager(identifier: str) -> SieveManager:
     """Create a SieveManager connected using an account's Sieve settings.
+
+    Accepts an account UUID, UUID prefix, or email address. Resolves
+    to the account record before connecting.
 
     Falls back to IMAP credentials if Sieve-specific credentials are
     not configured.
 
     Args:
-        account_uuid: Account UUID
+        identifier: Account UUID, UUID prefix, or email address
 
     Returns:
         Connected SieveManager
@@ -197,9 +211,14 @@ def get_sieve_manager(account_uuid: str) -> SieveManager:
         ConnectionError: If connection fails
     """
     svc = get_retposto_service()
-    acct = svc.get_account_with_password(account_uuid)
-    if not acct or "password" not in acct:
-        raise ValueError(f"Account not found or missing password: {account_uuid}")
+    acct = svc.resolve_account(identifier)
+    if not acct:
+        raise ValueError(f"Account not found: {identifier}")
+    acct_with_pw = svc.get_account_with_password(acct["uuid"])
+    if not acct_with_pw:
+        raise ValueError(
+            f"No password configured for account {identifier}"
+        )
 
     manager = SieveManager(
         host=acct.get("sieve_servilo", "") or acct.get("imap_servilo", ""),

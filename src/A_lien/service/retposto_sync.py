@@ -118,8 +118,10 @@ class RetpostoSyncMixin:
         """
         from A_lien.imap import sync_account as _sync
         acct = self.get_account_with_password(uuid)
-        if not acct or "password" not in acct:
-            raise ValueError(f"No password for account: {uuid}")
+        if not acct:
+            raise ValueError(
+                f"No password configured for account {uuid[:8]}"
+            )
         result = _sync(
             host=acct.get("imap_servilo", ""), port=acct.get("imap_haveno", 993),
             use_ssl=acct.get("imap_ssl", 1) == 1,
@@ -136,7 +138,10 @@ class RetpostoSyncMixin:
         return result
 
     def sync_all(self, force: bool = False) -> dict[str, Any]:
-        """Sync messages for all accounts concurrently."""
+        """Sync messages for all accounts concurrently.
+
+        Warns about accounts that are skipped due to missing keyring passwords.
+        """
         from A_lien.imap import sync_accounts_concurrent
         accounts = self.list_accounts()
         enriched: list[dict[str, Any]] = []
@@ -147,6 +152,12 @@ class RetpostoSyncMixin:
                 acct["db_store"] = self
                 acct["force"] = force
                 enriched.append(acct)
+            else:
+                from A import warning as _warning
+                _warning(
+                    f"  Skipping {acct.get('retposto', acct['uuid'][:8])} "
+                    f"(no password in keyring)"
+                )
         return sync_accounts_concurrent(enriched)
 
     def send_email(
@@ -180,8 +191,10 @@ class RetpostoSyncMixin:
         from A_lien.imap import should_autosave_contact
 
         acct = self.get_account_with_password(account_uuid)
-        if not acct or "password" not in acct:
-            raise ValueError(f"No password for account: {account_uuid}")
+        if not acct:
+            raise ValueError(
+                f"No password configured for account {account_uuid[:8]}"
+            )
         sender_email = acct.get("retposto", "")
         cc = cc or []
         bcc = bcc or []

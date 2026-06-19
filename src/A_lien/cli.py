@@ -593,13 +593,21 @@ def retposto_dosierujoj(
 ) -> None:
     """List IMAP folders for an account."""
     svc = get_retposto_service()
-    acct = svc.get_account_with_password(account)
-    if not acct or "password" not in acct:
+    resolved = svc.resolve_account(account)
+    if not resolved:
         error(tr_multi(
-            "Konto ne trovita aŭ mankas pasvorto.",
-            "Account not found or missing password.",
-            "Compte non trouvé ou mot de passe manquant.",
-        ))
+            "Konto ne trovita: {a}",
+            "Account not found: {a}",
+            "Compte non trouvé: {a}",
+        ).format(a=account))
+        raise typer.Exit(1)
+    acct = svc.get_account_with_password(resolved["uuid"])
+    if not acct:
+        error(tr_multi(
+            "Pasvorto ne agordita por konto {a}.",
+            "No password configured for account {a}.",
+            "Mot de passe non configuré pour le compte {a}.",
+        ).format(a=account))
         raise typer.Exit(1)
 
     from A_lien.imap import IMAPClient
