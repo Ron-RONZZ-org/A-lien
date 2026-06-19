@@ -24,7 +24,8 @@ dev = [
 ]
 
 [project.entry-points."A.commands"]
-lien = "A_lien.cli:app"
+retposto = "A_lien.entry_points:retposto"
+kontakto = "A_lien.entry_points:kontakto"
 
 [project.entry-points."A.migrations"]
 A-lien = "A_lien.data.migration_register:register"
