@@ -117,15 +117,22 @@ class SieveManager:
 
         Returns:
             List of dicts with keys: name, active
+
+        Raises:
+            RuntimeError: If the server returns a non-OK response.
         """
         try:
-            scripts = self.client.listscripts()
-            return [
-                {"name": name, "active": active}
-                for name, active in scripts
-            ]
+            typ, scripts_data = self.client.listscripts()
         except Exception as e:
             raise RuntimeError(f"Failed to list scripts: {e}") from e
+        if typ != "OK":
+            raise RuntimeError(
+                f"Failed to list scripts: server responded {typ}"
+            )
+        return [
+            {"name": name, "active": active}
+            for name, active in scripts_data
+        ]
 
     def get_script(self, name: str) -> str:
         """Download a Sieve script from the server.
@@ -135,12 +142,19 @@ class SieveManager:
 
         Returns:
             Script content as string
+
+        Raises:
+            RuntimeError: If the server returns a non-OK response.
         """
         try:
-            content = self.client.getscript(name)
-            return content
+            typ, content = self.client.getscript(name)
         except Exception as e:
             raise RuntimeError(f"Failed to get script '{name}': {e}") from e
+        if typ != "OK":
+            raise RuntimeError(
+                f"Failed to get script '{name}': server responded {typ}"
+            )
+        return content
 
     def put_script(self, name: str, content: str) -> None:
         """Upload a Sieve script to the server.
@@ -163,31 +177,49 @@ class SieveManager:
             )
 
         try:
-            self.client.putscript(name, content)
+            typ = self.client.putscript(name, content)
         except Exception as e:
             raise RuntimeError(f"Failed to upload script '{name}': {e}") from e
+        if typ != "OK":
+            raise RuntimeError(
+                f"Failed to upload script '{name}': server responded {typ}"
+            )
 
     def delete_script(self, name: str) -> None:
         """Delete a Sieve script from the server.
 
         Args:
             name: Script name
+
+        Raises:
+            RuntimeError: If the server returns a non-OK response.
         """
         try:
-            self.client.deletescript(name)
+            typ = self.client.deletescript(name)
         except Exception as e:
             raise RuntimeError(f"Failed to delete script '{name}': {e}") from e
+        if typ != "OK":
+            raise RuntimeError(
+                f"Failed to delete script '{name}': server responded {typ}"
+            )
 
     def activate_script(self, name: str) -> None:
         """Set a script as the active Sieve script.
 
         Args:
             name: Script name
+
+        Raises:
+            RuntimeError: If the server returns a non-OK response.
         """
         try:
-            self.client.setactive(name)
+            typ = self.client.setactive(name)
         except Exception as e:
             raise RuntimeError(f"Failed to activate script '{name}': {e}") from e
+        if typ != "OK":
+            raise RuntimeError(
+                f"Failed to activate script '{name}': server responded {typ}"
+            )
 
 
 # ── Convenience: connect from account ────────────────────────────────────────

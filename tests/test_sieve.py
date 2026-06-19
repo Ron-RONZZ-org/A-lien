@@ -89,12 +89,21 @@ class TestSieveManager:
     def mock_mclient(self):
         """Mock the managesieve.MANAGESIEVE class at package level.
 
-        The mock instance's ``login()`` returns ``"OK"`` by default so
-        that the connect check passes; individual tests can override.
+        Default return values match the real managesieve library API
+        (all methods return ``"OK"`` for success, ``listscripts`` and
+        ``getscript`` return ``(typ, data)`` tuples).
         """
         with patch("managesieve.MANAGESIEVE") as mock:
             mock_instance = MagicMock()
             mock_instance.login.return_value = "OK"
+            # All command-style methods return "OK" by default
+            mock_instance.putscript.return_value = "OK"
+            mock_instance.deletescript.return_value = "OK"
+            mock_instance.setactive.return_value = "OK"
+            mock_instance.logout.return_value = "OK"
+            # Data-returning methods return (typ, data) tuples
+            mock_instance.listscripts.return_value = ("OK", [])
+            mock_instance.getscript.return_value = ("OK", "")
             mock.return_value = mock_instance
             yield mock, mock_instance
 
@@ -117,10 +126,10 @@ class TestSieveManager:
     def test_list_scripts(self, mock_mclient):
         """List scripts returns parsed script info."""
         _, mock_inst = mock_mclient
-        mock_inst.listscripts.return_value = [
-            ("script1.sieve", True),
-            ("script2.sieve", False),
-        ]
+        mock_inst.listscripts.return_value = (
+            "OK",
+            [("script1.sieve", True), ("script2.sieve", False)],
+        )
         manager = SieveManager("sieve.test.com", 4190)
         manager.connect("user", "pw")
         scripts = manager.list_scripts()
@@ -132,7 +141,7 @@ class TestSieveManager:
     def test_get_script(self, mock_mclient):
         """Get script returns content."""
         _, mock_inst = mock_mclient
-        mock_inst.getscript.return_value = 'require ["fileinto"];'
+        mock_inst.getscript.return_value = ("OK", 'require ["fileinto"];')
         manager = SieveManager("sieve.test.com", 4190)
         manager.connect("user", "pw")
         content = manager.get_script("myfilter.sieve")
