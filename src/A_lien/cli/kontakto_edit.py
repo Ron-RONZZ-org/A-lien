@@ -377,7 +377,7 @@ def kontakto_eksporti(
         help=tr_multi("Eksporti unu kontakton", "Export single contact", "Exporter un contact"),
     ),
     output: str = typer.Option(
-        "", "--output", "-o",
+        "", "--eligo", "-o",
         help=tr_multi("Eliga dosiera vojo", "Output file path", "Chemin de sortie"),
     ),
 ) -> None:

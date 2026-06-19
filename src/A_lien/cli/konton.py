@@ -105,19 +105,19 @@ def konton_aldoni(
         help=tr_multi("Vidiga nomo", "Display name", "Nom d'affichage"),
     ),
     imap_servilo: str = typer.Option(
-        "", "--imap-server",
+        "", "--imap-servilo",
         help=tr_multi("IMAP servilo", "IMAP server", "Serveur IMAP"),
     ),
     imap_haveno: int = typer.Option(
-        993, "--imap-port",
+        993, "--imap-pordo",
         help=tr_multi("IMAP haveno", "IMAP port", "Port IMAP"),
     ),
     smtp_servilo: str = typer.Option(
-        "", "--smtp-server",
+        "", "--smtp-servilo",
         help=tr_multi("SMTP servilo", "SMTP server", "Serveur SMTP"),
     ),
     smtp_haveno: int = typer.Option(
-        587, "--smtp-port",
+        587, "--smtp-pordo",
         help=tr_multi("SMTP haveno", "SMTP port", "Port SMTP"),
     ),
     subskribo: str = typer.Option(
@@ -129,7 +129,7 @@ def konton_aldoni(
         ),
     ),
     password: str = typer.Option(
-        ..., "--password", "-p", prompt=True, hide_input=True,
+        ..., "--pasvorto", "-p", prompt=True, hide_input=True,
         help=tr_multi("Konto pasvorto", "Account password", "Mot de passe"),
     ),
 ) -> None:
@@ -202,7 +202,7 @@ def konton_forigi(
     )],
     force: bool = typer.Option(
         False,
-        "--force", "-f",
+        "--deviga", "-f",
         help=tr_multi(
             "Forigi sen konfirmo",
             "Delete without confirmation",
@@ -261,19 +261,19 @@ def konton_modifi(
         help=tr_multi("Vidiga nomo", "Display name", "Nom d'affichage"),
     ),
     imap_servilo: str = typer.Option(
-        "", "--imap-server",
+        "", "--imap-servilo",
         help=tr_multi("IMAP servilo", "IMAP server", "Serveur IMAP"),
     ),
     imap_haveno: int = typer.Option(
-        0, "--imap-port",
+        0, "--imap-pordo",
         help=tr_multi("IMAP haveno", "IMAP port", "Port IMAP"),
     ),
     smtp_servilo: str = typer.Option(
-        "", "--smtp-server",
+        "", "--smtp-servilo",
         help=tr_multi("SMTP servilo", "SMTP server", "Serveur SMTP"),
     ),
     smtp_haveno: int = typer.Option(
-        0, "--smtp-port",
+        0, "--smtp-pordo",
         help=tr_multi("SMTP haveno", "SMTP port", "Port SMTP"),
     ),
     subskribo: str = typer.Option(
@@ -285,7 +285,7 @@ def konton_modifi(
         ),
     ),
     password: str = typer.Option(
-        "", "--password", "-p",
+        "", "--pasvorto", "-p",
         help=tr_multi("Nova pasvorto", "New password", "Nouveau mot de passe"),
     ),
 ) -> None:

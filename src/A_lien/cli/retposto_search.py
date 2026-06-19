@@ -113,7 +113,7 @@ def retposto_serci(
         ),
     ),
     output: Optional[str] = typer.Option(
-        None, "--output", "-o",
+        None, "--eligo", "-o",
         help=tr_multi(
             "Eliga dosiero (anstataŭ stdout)",
             "Output file (instead of stdout)",

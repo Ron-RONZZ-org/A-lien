@@ -71,10 +71,10 @@ class TestKontonAldoniSubskribo:
         result = _run([
             "retposto", "konton", "aldoni",
             "--retposto", "alice@test.com",
-            "--imap-server", "imap.test.com",
-            "--smtp-server", "smtp.test.com",
+            "--imap-servilo", "imap.test.com",
+            "--smtp-servilo", "smtp.test.com",
             "--subskribo", "My Sig",
-            "--password", "pw",
+            "--pasvorto", "pw",
         ])
         assert result.exit_code == 0
         # Verify stored UUID
@@ -88,10 +88,10 @@ class TestKontonAldoniSubskribo:
         result = _run([
             "retposto", "konton", "aldoni",
             "--retposto", "bob@test.com",
-            "--imap-server", "imap.test.com",
-            "--smtp-server", "smtp.test.com",
+            "--imap-servilo", "imap.test.com",
+            "--smtp-servilo", "smtp.test.com",
             "--subskribo", "Nonexistent",
-            "--password", "pw",
+            "--pasvorto", "pw",
         ])
         assert result.exit_code == 1
         assert "ne trovita" in result.stdout or "not found" in result.stdout

@@ -27,7 +27,7 @@ filtraj_app = typer.Typer(
 @filtraj_app.command("ls")
 def filtraj_ls(
     account: str = typer.Option(
-        ..., "--account", "-a",
+        ..., "--konto", "-a",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
 ) -> None:
@@ -60,7 +60,7 @@ def filtraj_ls(
 @filtraj_app.command("vidi")
 def filtraj_vidi(
     account: str = typer.Option(
-        ..., "--account", "-a",
+        ..., "--konto", "-a",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
     name: str = typer.Argument(
@@ -84,7 +84,7 @@ def filtraj_vidi(
 @filtraj_app.command("aldoni")
 def filtraj_aldoni(
     account: str = typer.Option(
-        ..., "--account", "-a",
+        ..., "--konto", "-a",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
     path: str = typer.Argument(
@@ -162,7 +162,7 @@ def filtraj_aldoni(
 @filtraj_app.command("forigi")
 def filtraj_forigi(
     account: str = typer.Option(
-        ..., "--account", "-a",
+        ..., "--konto", "-a",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
     name: str = typer.Argument(
@@ -188,7 +188,7 @@ def filtraj_forigi(
 @filtraj_app.command("aktivi")
 def filtraj_aktivi(
     account: str = typer.Option(
-        ..., "--account", "-a",
+        ..., "--konto", "-a",
         help=tr_multi("Konto UUID", "Account UUID", "UUID compte"),
     ),
     name: str = typer.Argument(
