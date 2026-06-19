@@ -9,6 +9,8 @@ from pathlib import Path as _Path
 
 import typer
 
+import traceback
+
 from A import error, info, tr_multi
 from A_lien.sieve import get_sieve_manager, validate_sieve
 
@@ -153,7 +155,19 @@ def filtraj_aldoni(
             sieve.activate_script(script_name)
         sieve.disconnect()
     except Exception as e:
-        error(str(e))
+        error(tr_multi(
+            f"Eraro alŝutante filtrilon: {e}",
+            f"Error uploading filter: {e}",
+            f"Erreur lors du téléchargement du filtre: {e}",
+        ))
+        error(tr_multi(
+            "Detaloj:",
+            "Details:",
+            "Détails:",
+        ))
+        for line in traceback.format_exception(type(e), e, e.__traceback__):
+            for subline in line.rstrip().splitlines():
+                error(subline)
         raise typer.Exit(1)
 
     info(tr_multi(
