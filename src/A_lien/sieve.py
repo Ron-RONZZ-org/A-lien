@@ -226,8 +226,8 @@ def get_sieve_manager(identifier: str) -> SieveManager:
         use_tls=acct.get("sieve_starttls", 1) == 1,
     )
     manager.connect(
-        username=acct.get("sieve_uzantonomo", "") or acct.get("retposto", ""),
-        password=acct["password"],
+        username=acct_with_pw.get("sieve_uzantonomo", "") or acct_with_pw.get("retposto", ""),
+        password=acct_with_pw["password"],
     )
     return manager
 
