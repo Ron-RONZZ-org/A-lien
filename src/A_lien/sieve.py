@@ -69,7 +69,9 @@ class SieveManager:
         try:
             from managesieve import MANAGESIEVE as SieveClient
             self._client = SieveClient(self.host, self.port, use_tls=self.use_tls)
-            login_ok = self._client.login(username, password)
+            # managesieve.login(auth, user, password)
+            # auth = authorization identity (empty = self)
+            login_ok = self._client.login("", username, password)
             if login_ok != "OK":
                 reason = self._client.response_text or login_ok
                 raise ConnectionError(
