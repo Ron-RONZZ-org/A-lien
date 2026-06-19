@@ -23,6 +23,18 @@ A-lien combines two autish commands:
 
 This is intentional — they share the same SQLite database (`lien.db`) for contacts→email linking.
 
+## CLI Option Naming Exceptions
+
+Per the [workspace AGENTS.md](https://github.com/Ron-RONZZ-org/A-workspace/blob/main/AGENTS.md#options-flags), the following option names are exempt from the Esperanto requirement in A-lien:
+
+| Exemption | Flags | Rationale |
+|-----------|-------|-----------|
+| **RFC email headers** | `--from`, `--to`, `--cc`, `--bcc`, `--subject`, `--body` | These are RFC 5322 wire-format field names recognized universally. Translating them would reduce usability. |
+| **Format names** | `--html`, `--json` | Proper nouns / format identifiers. |
+| **Debug/technical** | `--debug-imap`, `--stdout` | Developer-only flags for internal diagnostics. |
+
+All other CLI option flags **must** be in Esperanto per the workspace convention.
+
 ## Architecture
 
 ```
