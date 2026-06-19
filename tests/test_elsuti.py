@@ -237,9 +237,10 @@ class TestElsutiStdout:
         from A_lien.service import get_retposto_service
 
         svc = get_retposto_service()
+        # Use a non-extractable binary MIME type (ZIP, not PDF)
         attachments = [{
-            "dosiernomo": "chart.pdf",
-            "mime_tipo": "application/pdf",
+            "dosiernomo": "archive.zip",
+            "mime_tipo": "application/zip",
             "grandeco": 50_000,
         }]
 
@@ -254,7 +255,7 @@ class TestElsutiStdout:
         all_calls = [str(c[0][0]) for c in mock_info.call_args_list]
         combined = " ".join(all_calls)
         assert "binary" in combined.lower() or "binaire" in combined.lower()
-        assert "chart.pdf" in combined
+        assert "archive.zip" in combined
 
     def test_stdout_specific_filename(self):
         """--stdout with a specific filename should print that attachment."""
@@ -280,3 +281,105 @@ class TestElsutiStdout:
         all_calls = [str(c[0][0]) for c in mock_info.call_args_list]
         combined = " ".join(all_calls)
         assert "csv,data,here" in combined
+
+
+# ---------------------------------------------------------------------------
+# PDF extraction in --stdout mode
+# ---------------------------------------------------------------------------
+
+
+class TestElsutiStdoutPdf:
+    """Tests for PDF text extraction via elsuti --stdout."""
+
+    def test_pdf_attachment_detected_as_extractable(self):
+        """application/pdf should be recognised as extractable binary."""
+        from A_lien.cli.retposto_elsuti import _is_extractable_binary
+
+        assert _is_extractable_binary("application/pdf")
+        assert not _is_extractable_binary("application/zip")
+        assert not _is_extractable_binary("text/plain")
+        assert not _is_extractable_binary("image/jpeg")
+
+    def test_stdout_pdf_with_a_papero_installed(self):
+        """With A-papero available, PDF content should be extracted and printed."""
+        from A_lien.service import get_retposto_service
+
+        svc = get_retposto_service()
+        attachments = [{
+            "dosiernomo": "doc.pdf",
+            "mime_tipo": "application/pdf",
+            "grandeco": 500,
+        }]
+
+        # Simulate A-papero being importable
+        with patch.object(svc, "get_message", return_value={"uuid": "abc12345"}), \
+             patch.object(svc, "get_attachments", return_value=attachments), \
+             patch.object(svc, "get_attachment_content", return_value=b"fake pdf bytes"), \
+             patch("A_lien.cli.retposto_elsuti._try_extract_pdf_text",
+                   return_value="Extracted PDF text content."), \
+             patch("A_lien.cli.retposto_elsuti.info") as mock_info:
+
+            runner = CliRunner()
+            result = runner.invoke(app, ["retposto", "elsuti", "abc12345", "--stdout"])
+
+        assert result.exit_code == 0
+        all_calls = [str(c[0][0]) for c in mock_info.call_args_list]
+        combined = " ".join(all_calls)
+        assert "Extracted PDF text content" in combined
+        assert "doc.pdf" in combined
+
+    def test_stdout_pdf_without_a_papero(self):
+        """Without A-papero, show install hint instead of content."""
+        from A_lien.service import get_retposto_service
+
+        svc = get_retposto_service()
+        attachments = [{
+            "dosiernomo": "doc.pdf",
+            "mime_tipo": "application/pdf",
+            "grandeco": 500,
+        }]
+
+        with patch.object(svc, "get_message", return_value={"uuid": "abc12345"}), \
+             patch.object(svc, "get_attachments", return_value=attachments), \
+             patch.object(svc, "get_attachment_content", return_value=b"fake pdf bytes"), \
+             patch("A_lien.cli.retposto_elsuti._try_extract_pdf_text",
+                   return_value=None), \
+             patch("A_lien.cli.retposto_elsuti.info") as mock_info:
+
+            runner = CliRunner()
+            result = runner.invoke(app, ["retposto", "elsuti", "abc12345", "--stdout"])
+
+        assert result.exit_code == 0
+        all_calls = [str(c[0][0]) for c in mock_info.call_args_list]
+        combined = " ".join(all_calls)
+        assert "pip install" in combined.lower()
+        assert "A-papero" in combined or "papero" in combined
+
+    def test_stdout_pdf_single_filename(self):
+        """--stdout with a PDF filename should extract that specific attachment."""
+        from A_lien.service import get_retposto_service
+
+        svc = get_retposto_service()
+        attachments = [
+            {"dosiernomo": "notes.txt", "mime_tipo": "text/plain", "grandeco": 50},
+            {"dosiernomo": "report.pdf", "mime_tipo": "application/pdf", "grandeco": 500},
+        ]
+
+        with patch.object(svc, "get_message", return_value={"uuid": "abc12345"}), \
+             patch.object(svc, "get_attachments", return_value=attachments), \
+             patch.object(svc, "get_attachment_content", return_value=b"pdf content here"), \
+             patch("A_lien.cli.retposto_elsuti._try_extract_pdf_text",
+                   return_value="PDF text content"), \
+             patch("A_lien.cli.retposto_elsuti.info") as mock_info:
+
+            runner = CliRunner()
+            result = runner.invoke(app, [
+                "retposto", "elsuti", "abc12345", "report.pdf", "--stdout",
+            ])
+
+        assert result.exit_code == 0
+        all_calls = [str(c[0][0]) for c in mock_info.call_args_list]
+        combined = " ".join(all_calls)
+        assert "PDF text content" in combined
+        assert "report.pdf" in combined
+        assert "notes.txt" not in combined  # Should NOT include other attachments
